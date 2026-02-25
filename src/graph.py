@@ -10,7 +10,7 @@ from typing import Literal
 from langgraph.graph import END, START, StateGraph
 
 from src.config import get_model_metadata
-from src.exceptions import NodeExecutionError, RubricLoadError
+from src.exceptions import NodeExecutionError, RubricLoadError, StateValidationError
 from src.nodes.detectives import (
     doc_analyst_node,
     evidence_aggregator_node,
@@ -329,33 +329,127 @@ def run_interim_audit(
     }
     
     # Create and run interim graph
-    graph = create_interim_graph(rubric_path)
-    final_state = graph.invoke(initial_state)
+    try:
+        graph = create_interim_graph(rubric_path)
+        final_state = graph.invoke(initial_state)
+    except Exception as e:
+        raise NodeExecutionError(
+            "interim_graph",
+            f"Failed to execute interim audit: {str(e)}"
+        ) from e
     
-    # Save evidence to JSON
-    if final_state.get("evidences"):
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        evidence_dict = {
+    # Validate state after execution
+    if not final_state.get("repo_url"):
+        raise StateValidationError("repo_url", "Missing after graph execution")
+    if not final_state.get("pdf_path"):
+        raise StateValidationError("pdf_path", "Missing after graph execution")
+    
+    # Validate and save evidence to JSON
+    evidences = final_state.get("evidences", {})
+    if not evidences:
+        print("Warning: No evidence collected. Check detective node execution.")
+        return final_state
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Calculate statistics
+    total_evidences = sum(len(ev_list) for ev_list in evidences.values() if isinstance(ev_list, list))
+    evidence_sources = len(evidences)
+    
+    # Count by confidence levels
+    high_confidence = sum(
+        1 for ev_list in evidences.values()
+        if isinstance(ev_list, list)
+        for ev in ev_list
+        if hasattr(ev, "confidence") and ev.confidence > 0.7
+    )
+    medium_confidence = sum(
+        1 for ev_list in evidences.values()
+        if isinstance(ev_list, list)
+        for ev in ev_list
+        if hasattr(ev, "confidence") and 0.4 < ev.confidence <= 0.7
+    )
+    low_confidence = sum(
+        1 for ev_list in evidences.values()
+        if isinstance(ev_list, list)
+        for ev in ev_list
+        if hasattr(ev, "confidence") and ev.confidence <= 0.4
+    )
+    
+    # Count by found status
+    found_count = sum(
+        1 for ev_list in evidences.values()
+        if isinstance(ev_list, list)
+        for ev in ev_list
+        if hasattr(ev, "found") and ev.found
+    )
+    not_found_count = total_evidences - found_count
+    
+    # Count dimensions covered
+    dimension_ids_covered = set()
+    for ev_list in evidences.values():
+        if isinstance(ev_list, list):
+            for ev in ev_list:
+                if hasattr(ev, "criterion_id"):
+                    dimension_ids_covered.add(ev.criterion_id)
+    
+    # Build comprehensive evidence dictionary
+    evidence_dict = {
+        "metadata": {
             "repo_url": repo_url,
             "pdf_path": pdf_path,
             "git_commit_hash": final_state.get("git_commit_hash", ""),
-            "evidences": {
-                source: [
-                    {
-                        "criterion_id": ev.criterion_id,
-                        "goal": ev.goal,
-                        "found": ev.found,
-                        "location": ev.location,
-                        "confidence": ev.confidence,
-                    }
-                    for ev in evidence_list
-                ]
-                for source, evidence_list in final_state["evidences"].items()
+            "timestamp": datetime.now().isoformat(),
+            "model_metadata": final_state.get("model_metadata", {}),
+        },
+        "statistics": {
+            "total_evidences": total_evidences,
+            "evidence_sources": evidence_sources,
+            "dimensions_covered": len(dimension_ids_covered),
+            "total_dimensions": len(final_state.get("rubric_dimensions", [])),
+            "confidence_distribution": {
+                "high": high_confidence,
+                "medium": medium_confidence,
+                "low": low_confidence,
             },
-        }
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(evidence_dict, f, indent=2)
-        print(f"Interim evidence saved to: {output_path}")
+            "found_status": {
+                "found": found_count,
+                "not_found": not_found_count,
+            },
+        },
+        "evidences": {
+            source: [
+                {
+                    "criterion_id": ev.criterion_id,
+                    "goal": ev.goal,
+                    "found": ev.found,
+                    "location": ev.location,
+                    "confidence": ev.confidence,
+                    "rationale": ev.rationale,
+                    "content": ev.content[:500] if ev.content and len(ev.content) > 500 else ev.content,  # Truncate long content
+                    "content_truncated": ev.content is not None and len(ev.content) > 500 if ev.content else False,
+                }
+                for ev in evidence_list
+            ]
+            for source, evidence_list in evidences.items()
+        },
+    }
+    
+    # Save to JSON
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(evidence_dict, f, indent=2, ensure_ascii=False)
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print("Interim Audit Summary")
+    print(f"{'='*60}")
+    print(f"Evidence Sources: {evidence_sources} (repo, doc, vision)")
+    print(f"Total Evidences: {total_evidences}")
+    print(f"Dimensions Covered: {len(dimension_ids_covered)}/{len(final_state.get('rubric_dimensions', []))}")
+    print(f"Confidence: High={high_confidence}, Medium={medium_confidence}, Low={low_confidence}")
+    print(f"Found Status: Found={found_count}, Not Found={not_found_count}")
+    print(f"Evidence saved to: {output_path}")
+    print(f"{'='*60}\n")
     
     return final_state
 
