@@ -383,10 +383,11 @@ Multiple rules can fire simultaneously. First rule that sets `score` wins. All t
 ### 7.1 Environment Variables
 
 ```bash
+# IMPORTANT: These are PLACEHOLDERS only. Copy .env.example to .env and fill in your actual keys.
 # API Keys
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=your_openai_api_key_here
 LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=lsv2_pt_...
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
 LANGCHAIN_PROJECT=automaton-auditor
 
 # Per-layer model config

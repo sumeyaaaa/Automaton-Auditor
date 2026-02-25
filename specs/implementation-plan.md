@@ -215,9 +215,10 @@ langchain-google-genai >= 0.0.6  # For vision models
 
 ### Environment Variables
 ```bash
-OPENAI_API_KEY=sk-...
+# IMPORTANT: These are PLACEHOLDERS only. Copy .env.example to .env and fill in your actual keys.
+OPENAI_API_KEY=your_openai_api_key_here
 LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=lsv2_pt_...
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
 LANGCHAIN_PROJECT=automaton-auditor
 LAYER1_MODEL=gpt-4o-mini
 LAYER2_MODEL=gpt-4o
