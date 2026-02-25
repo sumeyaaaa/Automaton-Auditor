@@ -1,0 +1,20 @@
+# Specify Configuration
+# Spec-Driven Development for Automaton Auditor
+
+ai_assistant: cursor-agent
+project_name: automaton-auditor
+spec_directory: specs
+constitution_file: .specify/constitution.md
+
+# Auto-generation settings
+auto_generate: true
+watch_files:
+  - src/**/*.py
+  - doc/Architecture.MD
+  - rubric.json
+
+# Generation triggers
+triggers:
+  - on_commit: true
+  - on_file_change: false  # Set to true for real-time generation
+
