@@ -10,6 +10,7 @@ from typing import Literal
 from langgraph.graph import END, START, StateGraph
 
 from src.config import get_model_metadata
+from src.exceptions import NodeExecutionError, RubricLoadError
 from src.nodes.detectives import (
     doc_analyst_node,
     evidence_aggregator_node,
@@ -20,9 +21,156 @@ from src.state import AgentState
 
 
 def load_rubric(rubric_path: Path) -> dict:
-    """Load rubric JSON file."""
-    with open(rubric_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """Load rubric JSON file.
+    
+    Raises:
+        RubricLoadError: If rubric file cannot be loaded
+    """
+    if not rubric_path.exists():
+        raise RubricLoadError(str(rubric_path), "Rubric file not found")
+    
+    try:
+        with open(rubric_path, "r", encoding="utf-8") as f:
+            rubric = json.load(f)
+        
+        # Validate rubric structure
+        if "dimensions" not in rubric:
+            raise RubricLoadError(str(rubric_path), "Rubric missing 'dimensions' key")
+        
+        return rubric
+    except json.JSONDecodeError as e:
+        raise RubricLoadError(str(rubric_path), f"Invalid JSON: {str(e)}")
+    except Exception as e:
+        raise RubricLoadError(str(rubric_path), f"Unexpected error: {str(e)}")
+
+
+def should_continue_audit(state: AgentState) -> Literal["continue", "retry"]:
+    """Conditional routing function for evidence aggregator.
+    
+    Determines if audit should continue based on evidence quality and completeness.
+    Uses multiple heuristics to assess evidence quality before proceeding.
+    
+    Args:
+        state: Current agent state
+        
+    Returns:
+        "continue" to proceed to END or next layer, "retry" to retry evidence collection
+    """
+    evidences = state.get("evidences", {})
+    
+    # Check if we have evidence from at least one detective
+    if not evidences:
+        return "retry"
+    
+    # Count evidence sources and quality metrics
+    evidence_sources = len(evidences)
+    total_evidences = 0
+    high_confidence_count = 0
+    medium_confidence_count = 0
+    low_confidence_count = 0
+    
+    for evidence_list in evidences.values():
+        if isinstance(evidence_list, list):
+            for evidence in evidence_list:
+                total_evidences += 1
+                if hasattr(evidence, "confidence"):
+                    if evidence.confidence > 0.7:
+                        high_confidence_count += 1
+                    elif evidence.confidence > 0.4:
+                        medium_confidence_count += 1
+                    else:
+                        low_confidence_count += 1
+    
+    # Require at least 2 evidence sources (repo, doc, or vision)
+    if evidence_sources < 2:
+        return "retry"
+    
+    # Require at least some high or medium confidence evidence
+    if high_confidence_count == 0 and medium_confidence_count == 0:
+        return "retry"
+    
+    # Require minimum total evidence count
+    if total_evidences < 3:
+        return "retry"
+    
+    # Check if we have evidence for critical dimensions
+    rubric_dimensions = state.get("rubric_dimensions", [])
+    if rubric_dimensions:
+        # Count how many dimensions have evidence
+        dimension_ids_with_evidence = set()
+        for evidence_list in evidences.values():
+            if isinstance(evidence_list, list):
+                for evidence in evidence_list:
+                    if hasattr(evidence, "criterion_id"):
+                        dimension_ids_with_evidence.add(evidence.criterion_id)
+        
+        # Require evidence for at least 50% of dimensions
+        if len(dimension_ids_with_evidence) < len(rubric_dimensions) * 0.5:
+            return "retry"
+    
+    return "continue"
+
+
+def validate_final_report(state: AgentState) -> Literal["complete", "incomplete"]:
+    """Conditional routing function for chief justice.
+    
+    Validates that the final report is complete and meets quality standards before ending.
+    Performs comprehensive validation of report structure and content quality.
+    
+    Args:
+        state: Current agent state
+        
+    Returns:
+        "complete" if report is valid and meets quality standards, "incomplete" to retry
+    """
+    final_report = state.get("final_report")
+    
+    if not final_report:
+        return "incomplete"
+    
+    # Check if report has required fields with non-empty content
+    if not hasattr(final_report, "executive_summary") or not final_report.executive_summary:
+        return "incomplete"
+    
+    if len(final_report.executive_summary.strip()) < 100:
+        return "incomplete"
+    
+    if not hasattr(final_report, "criteria") or not final_report.criteria:
+        return "incomplete"
+    
+    if not hasattr(final_report, "remediation_plan") or not final_report.remediation_plan:
+        return "incomplete"
+    
+    if len(final_report.remediation_plan.strip()) < 100:
+        return "incomplete"
+    
+    # Check if all criteria have results
+    rubric_dimensions = state.get("rubric_dimensions", [])
+    if len(final_report.criteria) < len(rubric_dimensions):
+        return "incomplete"
+    
+    # Validate each criterion has required fields
+    for criterion in final_report.criteria:
+        if not hasattr(criterion, "dimension_id") or not criterion.dimension_id:
+            return "incomplete"
+        if not hasattr(criterion, "final_score") or criterion.final_score < 1 or criterion.final_score > 5:
+            return "incomplete"
+        if not hasattr(criterion, "judge_opinions") or len(criterion.judge_opinions) != 3:
+            return "incomplete"
+        if not hasattr(criterion, "remediation") or len(criterion.remediation.strip()) < 50:
+            return "incomplete"
+    
+    # Validate overall score is within valid range
+    if final_report.overall_score < 1.0 or final_report.overall_score > 5.0:
+        return "incomplete"
+    
+    # Check that all required judge personas are present
+    for criterion in final_report.criteria:
+        judges = {opinion.judge for opinion in criterion.judge_opinions}
+        if judges != {"Prosecutor", "Defense", "TechLead"}:
+            return "incomplete"
+    
+    return "complete"
 
 
 def create_interim_graph(rubric_path: Path = Path("rubric.json")) -> StateGraph:
@@ -59,9 +207,16 @@ def create_interim_graph(rubric_path: Path = Path("rubric.json")) -> StateGraph:
         "evidence_aggregator"
     )
     
-    # Evidence Aggregator -> END
-    workflow.add_edge("evidence_aggregator", END)
-    
+    # Evidence Aggregator -> Conditional routing based on evidence quality
+    workflow.add_conditional_edges(
+        "evidence_aggregator",
+        should_continue_audit,
+        {
+            "continue": END,  # For interim, we always end after evidence collection
+            "retry": "repo_investigator",  # Retry if evidence quality is poor (future enhancement)
+        }
+    )
+
     # Compile graph
     return workflow.compile()
 
@@ -122,10 +277,17 @@ def create_auditor_graph(rubric_path: Path = Path("rubric.json")) -> StateGraph:
         ["prosecutor", "defense", "tech_lead"],
         "chief_justice"
     )
-    
-    # Chief Justice -> END
-    workflow.add_edge("chief_justice", END)
-    
+
+    # Chief Justice -> Conditional routing based on report completeness
+    workflow.add_conditional_edges(
+        "chief_justice",
+        validate_final_report,
+        {
+            "complete": END,
+            "incomplete": "chief_justice",  # Retry synthesis if incomplete
+        }
+    )
+
     # Compile graph
     return workflow.compile()
 
