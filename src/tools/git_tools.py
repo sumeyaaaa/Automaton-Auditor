@@ -10,26 +10,31 @@ from typing import Dict, Optional
 import git
 from git import Repo
 
+from src.exceptions import GitOperationError, InvalidRepositoryError, RepositoryCloneError
 
-def safe_clone(repo_url: str, timeout: int = 60) -> tuple[Path, str]:
+
+def safe_clone(repo_url: str, timeout: int = 60, shallow: bool = False) -> tuple[Path, str]:
     """Clone repository into a sandboxed temporary directory.
     
     Args:
         repo_url: GitHub repository URL
         timeout: Timeout in seconds for git operations
+        shallow: If True, use shallow clone (depth=1) for speed. 
+                 If False, clone full history for forensic analysis.
         
     Returns:
         Tuple of (repo_path, commit_hash)
         
     Raises:
-        ValueError: If repo_url is invalid or clone fails
+        InvalidRepositoryError: If repo_url is invalid
+        RepositoryCloneError: If clone fails
     """
     if not repo_url or not isinstance(repo_url, str):
-        raise ValueError("Invalid repository URL")
+        raise InvalidRepositoryError(repo_url, "Repository URL is empty or not a string")
 
     # Sanitize URL (basic check)
     if not (repo_url.startswith("http") or repo_url.startswith("git@")):
-        raise ValueError(f"Invalid repository URL format: {repo_url}")
+        raise InvalidRepositoryError(repo_url, "Repository URL must start with 'http' or 'git@'")
 
     # Create temporary directory for sandboxing
     temp_dir = tempfile.mkdtemp(prefix="auditor_repo_")
@@ -37,20 +42,28 @@ def safe_clone(repo_url: str, timeout: int = 60) -> tuple[Path, str]:
 
     try:
         # Clone with error handling
-        repo = Repo.clone_from(
-            repo_url,
-            str(repo_path),
-            depth=1,  # Shallow clone for speed
-        )
+        # For forensic analysis, we need full history to count commits correctly
+        # Only use shallow clone if explicitly requested (for speed, but loses history)
+        if shallow:
+            repo = Repo.clone_from(repo_url, str(repo_path), depth=1)
+        else:
+            # Full clone to get complete commit history for forensic analysis
+            repo = Repo.clone_from(repo_url, str(repo_path))
         
         # Get current commit hash
         commit_hash = repo.head.commit.hexsha[:8]
         
         return repo_path, commit_hash
     except git.exc.GitCommandError as e:
-        raise ValueError(f"Failed to clone repository: {str(e)}")
+        error_msg = str(e)
+        if "Authentication failed" in error_msg or "Permission denied" in error_msg:
+            raise RepositoryCloneError(repo_url, "Authentication failed. Check credentials or repository access.")
+        elif "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
+            raise InvalidRepositoryError(repo_url, "Repository not found or does not exist")
+        else:
+            raise RepositoryCloneError(repo_url, error_msg)
     except Exception as e:
-        raise ValueError(f"Unexpected error during clone: {str(e)}")
+        raise RepositoryCloneError(repo_url, f"Unexpected error: {str(e)}")
 
 
 def extract_git_history(repo_path: Path) -> Dict:
@@ -76,11 +89,7 @@ def extract_git_history(repo_path: Path) -> Dict:
         )
         
         if result.returncode != 0:
-            return {
-                "error": f"git log failed: {result.stderr}",
-                "total_commits": 0,
-                "commits": [],
-            }
+            raise GitOperationError("git log", result.stderr or "Unknown error")
         
         commits = list(repo.iter_commits())
         commit_data = []
