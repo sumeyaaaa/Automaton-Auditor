@@ -2,7 +2,9 @@
 Chief Justice node for synthesizing final verdict.
 Implements deterministic conflict resolution rules.
 """
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.state import AgentState, AuditReport, CriterionResult, JudicialOpinion
@@ -128,8 +130,9 @@ def chief_justice_node(state: AgentState) -> AgentState:
         remediation_plan=remediation_plan,
     )
     
+    # Return Markdown string (required by AgentState.final_report: str)
     return {
-        "final_report": final_report,
+        "final_report": final_report.to_markdown(),
     }
 
 
@@ -240,13 +243,99 @@ def _generate_dissent_summary(opinions: List[JudicialOpinion]) -> str:
     return " ".join(summary_parts) if summary_parts else "No significant dissent among judges."
 
 
+def _extract_relative_path(location: str) -> Optional[tuple[str, Optional[str]]]:
+    """Extract relative file path and optional line number from evidence location.
+    
+    Handles:
+    - Windows temp paths: "C:\\Users\\...\\auditor_repo_xxx\\repo\\src\\file.py" -> "src/file.py"
+    - Unix paths: "/tmp/auditor_repo_xxx/repo/src/file.py" -> "src/file.py"
+    - Relative paths: "src/file.py:42" -> ("src/file.py", "42")
+    - URLs: "https://..." -> None
+    
+    Returns:
+        Tuple of (relative_path, line_number) or None if not a file path
+    """
+    if not location or location.startswith("http") or location.startswith("cross_ref"):
+        return None
+    
+    # Handle Windows temp directory pattern
+    # Match: C:\Users\...\auditor_repo_xxx\repo\src\file.py or similar
+    temp_pattern = r".*[\\/]auditor_repo_[^\\/]+[\\/]repo[\\/](.+)"
+    match = re.search(temp_pattern, location.replace("\\", "/"))
+    if match:
+        path_str = match.group(1).replace("\\", "/")
+    else:
+        # Try to extract relative path directly
+        # Check if it looks like a file path (contains .py, .js, etc.)
+        if "." in location and not location.startswith("C:"):
+            path_str = location.replace("\\", "/")
+        else:
+            return None
+    
+    # Extract line number if present (format: "path:line" or "path:line:col")
+    if ":" in path_str:
+        parts = path_str.rsplit(":", 1)
+        file_path = parts[0]
+        line_num = parts[1] if parts[1].isdigit() else None
+    else:
+        file_path = path_str
+        line_num = None
+    
+    # Only return if it looks like a source file path
+    if "/" in file_path or file_path.endswith((".py", ".js", ".ts", ".md", ".json", ".yaml", ".yml")):
+        return (file_path, line_num)
+    
+    return None
+
+
+def _extract_complete_sentences(text: str, max_sentences: int = 2) -> str:
+    """Extract complete sentences from text without truncation.
+    
+    Args:
+        text: Input text
+        max_sentences: Maximum number of sentences to extract
+        
+    Returns:
+        Complete sentences (up to max_sentences)
+    """
+    if not text:
+        return ""
+    
+    # Split by sentence endings, but preserve them
+    sentences = re.split(r'([.!?]\s+)', text)
+    result = []
+    char_count = 0
+    
+    for i in range(0, len(sentences) - 1, 2):
+        if i + 1 < len(sentences):
+            sentence = sentences[i] + sentences[i + 1]
+        else:
+            sentence = sentences[i]
+        
+        if len(result) >= max_sentences:
+            break
+        
+        # Limit total length to ~300 chars
+        if char_count + len(sentence) > 300 and result:
+            break
+        
+        result.append(sentence.strip())
+        char_count += len(sentence)
+    
+    if not result:
+        # Fallback: first 200 chars if no sentence breaks found
+        return text[:200].strip()
+    
+    return " ".join(result)
+
+
 def _generate_remediation(
     dimension_id: str,
     dimension_name: str,
     final_score: int,
     opinions: List[JudicialOpinion],
 ) -> str:
-    """Generate specific remediation instructions."""
+    """Generate specific, file-level remediation instructions."""
     if final_score >= 4:
         return f"{dimension_name} meets requirements. Minor improvements may be possible."
     
@@ -255,22 +344,59 @@ def _generate_remediation(
     
     remediation_parts = [f"To improve {dimension_name}:"]
     
-    if prosecutor:
-        # Extract specific issues from prosecutor
+    # Extract file-specific issues from cited evidence (deduplicated)
+    file_issues: Dict[str, List[str]] = {}
+    seen_issues = set()  # For deduplication
+    
+    if prosecutor and prosecutor.cited_evidence:
+        for location in prosecutor.cited_evidence:
+            path_info = _extract_relative_path(location)
+            if path_info:
+                file_path, line_num = path_info
+                
+                # Create unique key for deduplication
+                issue_key = f"{file_path}:{line_num or 'no-line'}"
+                if issue_key in seen_issues:
+                    continue
+                seen_issues.add(issue_key)
+                
+                if file_path not in file_issues:
+                    file_issues[file_path] = []
+                
+                # Extract complete sentence from prosecutor argument
+                issue_summary = _extract_complete_sentences(prosecutor.argument, max_sentences=1)
+                if not issue_summary:
+                    issue_summary = "Issue identified by Prosecutor"
+                
+                # Format with line number if available
+                if line_num:
+                    file_issues[file_path].append(f"Line {line_num}: {issue_summary}")
+                else:
+                    file_issues[file_path].append(issue_summary)
+    
+    # Add file-specific remediation (deduplicated)
+    for file_path, issues in sorted(file_issues.items()):
+        for issue in issues:
+            remediation_parts.append(f"- Fix {file_path} - {issue}")
+    
+    # Add general issues from prosecutor if no file-specific ones found
+    if not file_issues and prosecutor:
         arg = prosecutor.argument.lower()
-        if "missing" in arg or "absent" in arg:
-            remediation_parts.append(
-                f"- Address missing elements identified by the Prosecutor: {prosecutor.argument[:150]}"
-            )
         if "security" in arg:
             remediation_parts.append(
                 "- Implement proper security sandboxing for all system operations"
             )
+        if "missing" in arg or "absent" in arg:
+            # Extract complete sentence
+            issue_text = _extract_complete_sentences(prosecutor.argument, max_sentences=1)
+            if issue_text:
+                remediation_parts.append(f"- Address missing elements: {issue_text}")
     
+    # Add technical guidance from tech lead (complete sentences, not truncated)
     if tech_lead:
-        remediation_parts.append(
-            f"- Follow technical guidance: {tech_lead.argument[:150]}"
-        )
+        tech_guidance = _extract_complete_sentences(tech_lead.argument, max_sentences=1)
+        if tech_guidance:
+            remediation_parts.append(f"- Technical guidance: {tech_guidance}")
     
     # Add dimension-specific remediation
     if dimension_id == "state_management_rigor":
