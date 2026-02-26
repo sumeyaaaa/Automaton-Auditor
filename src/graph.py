@@ -1,16 +1,25 @@
 """
 Main LangGraph orchestration for the Automaton Auditor.
-Implements parallel fan-out/fan-in architecture for Detectives and Judges.
+
+This is the brain wiring — it connects detectives, judges, and the
+chief justice into a working multi-agent pipeline.
+
+Two graphs are available:
+- Interim: Detectives only (for testing evidence collection)
+- Final: Full pipeline including judges and synthesis
+
+Architecture spec reference: Section 5 — Graph Wiring
 """
+import logging
+logging.basicConfig(level=logging.INFO)
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
 from src.config import get_model_metadata
-from src.exceptions import NodeExecutionError, RubricLoadError, StateValidationError
+from src.exceptions import NodeExecutionError, RubricLoadError
 from src.nodes.detectives import (
     doc_analyst_node,
     evidence_aggregator_node,
@@ -20,402 +29,306 @@ from src.nodes.detectives import (
 from src.state import AgentState
 
 
+# ──────────────────────────────────────────────
+# Rubric Loading
+# ──────────────────────────────────────────────
+
 def load_rubric(rubric_path: Path) -> dict:
-    """Load rubric JSON file.
-    
+    """Load and validate the rubric JSON file.
+
+    The rubric is the 'constitution' of the courtroom — it defines
+    what detectives look for and what judges score against.
+
+    Args:
+        rubric_path: Path to the rubric JSON file
+
+    Returns:
+        Parsed rubric dictionary with 'dimensions' and 'synthesis_rules'
+
     Raises:
-        RubricLoadError: If rubric file cannot be loaded
+        RubricLoadError: If file is missing, malformed, or invalid
     """
     if not rubric_path.exists():
         raise RubricLoadError(str(rubric_path), "Rubric file not found")
-    
+
     try:
         with open(rubric_path, "r", encoding="utf-8") as f:
             rubric = json.load(f)
-        
-        # Validate rubric structure
+
         if "dimensions" not in rubric:
             raise RubricLoadError(str(rubric_path), "Rubric missing 'dimensions' key")
-        
+
         return rubric
     except json.JSONDecodeError as e:
-        raise RubricLoadError(str(rubric_path), f"Invalid JSON: {str(e)}")
-    except Exception as e:
-        raise RubricLoadError(str(rubric_path), f"Unexpected error: {str(e)}")
+        raise RubricLoadError(str(rubric_path), f"Invalid JSON: {e}")
 
 
-def should_continue_audit(state: AgentState) -> Literal["continue", "retry"]:
-    """Conditional routing function for evidence aggregator.
-    
-    Determines if audit should continue based on evidence quality and completeness.
-    Uses multiple heuristics to assess evidence quality before proceeding.
-    
-    Args:
-        state: Current agent state
-        
-    Returns:
-        "continue" to proceed to END or next layer, "retry" to retry evidence collection
+# ──────────────────────────────────────────────
+# Context Builder Node
+#
+# This node runs FIRST (Superstep 1). It loads the rubric
+# and model metadata into state so every downstream node
+# can access them without re-reading files.
+# ──────────────────────────────────────────────
+
+def context_builder_node(state: AgentState) -> dict:
+    """Load rubric and model metadata into state.
+
+    This is the initialization node. It reads the rubric JSON once
+    and puts it into state where all detectives and judges can find it.
+    It also records which AI models are being used for reproducibility.
+
+    Runs at: Superstep 1 (before any detective)
     """
-    evidences = state.get("evidences", {})
-    
-    # Check if we have evidence from at least one detective
-    if not evidences:
-        return "retry"
-    
-    # Count evidence sources and quality metrics
-    evidence_sources = len(evidences)
-    total_evidences = 0
-    high_confidence_count = 0
-    medium_confidence_count = 0
-    low_confidence_count = 0
-    
-    for evidence_list in evidences.values():
-        if isinstance(evidence_list, list):
-            for evidence in evidence_list:
-                total_evidences += 1
-                if hasattr(evidence, "confidence"):
-                    if evidence.confidence > 0.7:
-                        high_confidence_count += 1
-                    elif evidence.confidence > 0.4:
-                        medium_confidence_count += 1
-                    else:
-                        low_confidence_count += 1
-    
-    # Require at least 2 evidence sources (repo, doc, or vision)
-    if evidence_sources < 2:
-        return "retry"
-    
-    # Require at least some high or medium confidence evidence
-    if high_confidence_count == 0 and medium_confidence_count == 0:
-        return "retry"
-    
-    # Require minimum total evidence count
-    if total_evidences < 3:
-        return "retry"
-    
-    # Check if we have evidence for critical dimensions
-    rubric_dimensions = state.get("rubric_dimensions", [])
-    if rubric_dimensions:
-        # Count how many dimensions have evidence
-        dimension_ids_with_evidence = set()
-        for evidence_list in evidences.values():
-            if isinstance(evidence_list, list):
-                for evidence in evidence_list:
-                    if hasattr(evidence, "criterion_id"):
-                        dimension_ids_with_evidence.add(evidence.criterion_id)
-        
-        # Require evidence for at least 50% of dimensions
-        if len(dimension_ids_with_evidence) < len(rubric_dimensions) * 0.5:
-            return "retry"
-    
-    return "continue"
-
-
-def validate_final_report(state: AgentState) -> Literal["complete", "incomplete"]:
-    """Conditional routing function for chief justice.
-    
-    Validates that the final report is complete and meets quality standards before ending.
-    Performs comprehensive validation of report structure and content quality.
-    
-    Args:
-        state: Current agent state
-        
-    Returns:
-        "complete" if report is valid and meets quality standards, "incomplete" to retry
-    """
-    final_report = state.get("final_report")
-    
-    if not final_report:
-        return "incomplete"
-    
-    # Check if report has required fields with non-empty content
-    if not hasattr(final_report, "executive_summary") or not final_report.executive_summary:
-        return "incomplete"
-    
-    if len(final_report.executive_summary.strip()) < 100:
-        return "incomplete"
-    
-    if not hasattr(final_report, "criteria") or not final_report.criteria:
-        return "incomplete"
-    
-    if not hasattr(final_report, "remediation_plan") or not final_report.remediation_plan:
-        return "incomplete"
-    
-    if len(final_report.remediation_plan.strip()) < 100:
-        return "incomplete"
-    
-    # Check if all criteria have results
-    rubric_dimensions = state.get("rubric_dimensions", [])
-    if len(final_report.criteria) < len(rubric_dimensions):
-        return "incomplete"
-    
-    # Validate each criterion has required fields
-    for criterion in final_report.criteria:
-        if not hasattr(criterion, "dimension_id") or not criterion.dimension_id:
-            return "incomplete"
-        if not hasattr(criterion, "final_score") or criterion.final_score < 1 or criterion.final_score > 5:
-            return "incomplete"
-        if not hasattr(criterion, "judge_opinions") or len(criterion.judge_opinions) != 3:
-            return "incomplete"
-        if not hasattr(criterion, "remediation") or len(criterion.remediation.strip()) < 50:
-            return "incomplete"
-    
-    # Validate overall score is within valid range
-    if final_report.overall_score < 1.0 or final_report.overall_score > 5.0:
-        return "incomplete"
-    
-    # Check that all required judge personas are present
-    for criterion in final_report.criteria:
-        judges = {opinion.judge for opinion in criterion.judge_opinions}
-        if judges != {"Prosecutor", "Defense", "TechLead"}:
-            return "incomplete"
-    
-    return "complete"
-
-
-def create_interim_graph(rubric_path: Path = Path("rubric.json")) -> StateGraph:
-    """Create the partial auditor StateGraph for interim submission.
-    
-    Architecture (Interim):
-    START -> [3 Detectives in parallel] -> EvidenceAggregator -> END
-    
-    Judges and Chief Justice are not included in interim submission.
-    """
-    # Load rubric
+    rubric_path = Path(state.get("rubric_path", "rubric.json"))
     rubric = load_rubric(rubric_path)
-    
-    # Create graph
+
+    return {
+        "rubric_dimensions": rubric["dimensions"],
+        "synthesis_rules": rubric.get("synthesis_rules", {}),
+        "model_metadata": get_model_metadata(),
+    }
+
+
+# ──────────────────────────────────────────────
+# Graph Builders
+# ──────────────────────────────────────────────
+
+def create_interim_graph() -> StateGraph:
+    """Build the interim graph — detectives only.
+
+    This graph is for testing the evidence collection layer
+    in isolation before wiring in judges.
+
+    Architecture:
+        START → context_builder
+              → [3 detectives in PARALLEL]  (Superstep 2)
+              → evidence_aggregator         (Superstep 3)
+              → END
+    """
     workflow = StateGraph(AgentState)
-    
-    # Add nodes - Detective Layer only
+
+    # ── Nodes ──
+    workflow.add_node("context_builder", context_builder_node)
     workflow.add_node("repo_investigator", repo_investigator_node)
     workflow.add_node("doc_analyst", doc_analyst_node)
     workflow.add_node("vision_inspector", vision_inspector_node)
-    
-    # Evidence Aggregation (Fan-In)
     workflow.add_node("evidence_aggregator", evidence_aggregator_node)
-    
-    # Define edges - Partial graph for interim
-    # Start: Fan-out to Detectives
-    workflow.add_edge(START, "repo_investigator")
-    workflow.add_edge(START, "doc_analyst")
-    workflow.add_edge(START, "vision_inspector")
-    
-    # Detectives -> Evidence Aggregator (Fan-In using list syntax)
+
+    # ── Edges ──
+    # Superstep 1: Initialize
+    workflow.add_edge(START, "context_builder")
+
+    # Superstep 2: Fan-out to 3 detectives in parallel
+    workflow.add_edge("context_builder", "repo_investigator")
+    workflow.add_edge("context_builder", "doc_analyst")
+    workflow.add_edge("context_builder", "vision_inspector")
+
+    # Superstep 3: Fan-in — all 3 must complete before aggregator runs
+    # CRITICAL: Must use list syntax. Separate add_edge calls to the
+    # same destination would cause it to run multiple times.
     workflow.add_edge(
         ["repo_investigator", "doc_analyst", "vision_inspector"],
-        "evidence_aggregator"
-    )
-    
-    # Evidence Aggregator -> Conditional routing based on evidence quality
-    workflow.add_conditional_edges(
         "evidence_aggregator",
-        should_continue_audit,
-        {
-            "continue": END,  # For interim, we always end after evidence collection
-            "retry": "repo_investigator",  # Retry if evidence quality is poor (future enhancement)
-        }
     )
 
-    # Compile graph
+    # Superstep 4: End (no judges in interim)
+    workflow.add_edge("evidence_aggregator", END)
+
     return workflow.compile()
 
 
-def create_auditor_graph(rubric_path: Path = Path("rubric.json")) -> StateGraph:
-    """Create the complete auditor StateGraph.
-    
-    Architecture (Final):
-    START -> [Detectives in parallel] -> EvidenceAggregator -> 
-    [Judges in parallel] -> ChiefJustice -> END
+def create_auditor_graph() -> StateGraph:
+    """Build the complete auditor graph — detectives + judges + synthesis.
+
+    Architecture:
+        START → context_builder
+              → [3 detectives in PARALLEL]     (Superstep 2)
+              → evidence_aggregator            (Superstep 3)
+              → [3 judges in PARALLEL]         (Superstep 4)
+              → chief_justice                  (Superstep 5)
+              → END
     """
-    # Import judges and justice for final graph
+    # Late import to avoid circular dependency and allow
+    # interim graph to work without judge/justice modules
     from src.nodes.judges import defense_node, prosecutor_node, tech_lead_node
     from src.nodes.justice import chief_justice_node
-    
-    # Load rubric
-    rubric = load_rubric(rubric_path)
-    
-    # Create graph
+
     workflow = StateGraph(AgentState)
-    
-    # Add nodes
-    # Detective Layer (Parallel Fan-Out)
+
+    # ── Nodes ──
+    # Layer 0: Initialization
+    workflow.add_node("context_builder", context_builder_node)
+
+    # Layer 1: Detective Bureau (evidence collection)
     workflow.add_node("repo_investigator", repo_investigator_node)
     workflow.add_node("doc_analyst", doc_analyst_node)
     workflow.add_node("vision_inspector", vision_inspector_node)
-    
-    # Evidence Aggregation (Fan-In)
     workflow.add_node("evidence_aggregator", evidence_aggregator_node)
-    
-    # Judicial Layer (Parallel Fan-Out)
+
+    # Layer 2: Judicial Bench (scoring)
     workflow.add_node("prosecutor", prosecutor_node)
     workflow.add_node("defense", defense_node)
     workflow.add_node("tech_lead", tech_lead_node)
-    
-    # Supreme Court (Final Synthesis)
+
+    # Layer 3: Supreme Court (synthesis)
     workflow.add_node("chief_justice", chief_justice_node)
-    
-    # Define edges
-    # Start: Fan-out to Detectives
-    workflow.add_edge(START, "repo_investigator")
-    workflow.add_edge(START, "doc_analyst")
-    workflow.add_edge(START, "vision_inspector")
-    
-    # Detectives -> Evidence Aggregator (Fan-In using list syntax)
+
+    # ── Edges ──
+    # Superstep 1: Initialize
+    workflow.add_edge(START, "context_builder")
+
+    # Superstep 2: Fan-out to 3 detectives in parallel
+    workflow.add_edge("context_builder", "repo_investigator")
+    workflow.add_edge("context_builder", "doc_analyst")
+    workflow.add_edge("context_builder", "vision_inspector")
+
+    # Superstep 3: Fan-in detectives → aggregator
     workflow.add_edge(
         ["repo_investigator", "doc_analyst", "vision_inspector"],
-        "evidence_aggregator"
+        "evidence_aggregator",
     )
-    
-    # Evidence Aggregator -> Judges (Fan-Out)
+
+    # Superstep 4: Fan-out to 3 judges in parallel
     workflow.add_edge("evidence_aggregator", "prosecutor")
     workflow.add_edge("evidence_aggregator", "defense")
     workflow.add_edge("evidence_aggregator", "tech_lead")
-    
-    # Judges -> Chief Justice (Fan-In using list syntax)
+
+    # Superstep 5: Fan-in judges → chief justice
     workflow.add_edge(
         ["prosecutor", "defense", "tech_lead"],
-        "chief_justice"
-    )
-
-    # Chief Justice -> Conditional routing based on report completeness
-    workflow.add_conditional_edges(
         "chief_justice",
-        validate_final_report,
-        {
-            "complete": END,
-            "incomplete": "chief_justice",  # Retry synthesis if incomplete
-        }
     )
 
-    # Compile graph
+    # Superstep 6: Done
+    workflow.add_edge("chief_justice", END)
+
     return workflow.compile()
 
+
+# ──────────────────────────────────────────────
+# Runner Functions
+# ──────────────────────────────────────────────
 
 def run_interim_audit(
     repo_url: str,
     pdf_path: str,
-    rubric_path: Path = Path("rubric.json"),
+    rubric_path: str = "rubric.json",
     output_path: Path = Path("audit/interim_evidence.json"),
 ) -> dict:
-    """Run the interim audit workflow (detectives only).
-    
+    """Run the interim audit — detectives only, no judges.
+
+    Use this to test evidence collection in isolation.
+
     Args:
         repo_url: GitHub repository URL to audit
-        pdf_path: Path to PDF report
-        rubric_path: Path to rubric JSON file
-        output_path: Path to save the evidence output
-        
+        pdf_path: Path to the PDF report
+        rubric_path: Path to rubric JSON (passed to context_builder via state)
+        output_path: Where to save the evidence JSON
+
     Returns:
-        Final state with collected evidence
+        Final state dictionary with all collected evidence
     """
-    # Load rubric
-    rubric = load_rubric(rubric_path)
-    
-    # Get model metadata for report
-    model_metadata = get_model_metadata()
-    
-    # Initialize state
-    initial_state: AgentState = {
+    # Initial state — only set what the graph needs to start.
+    # context_builder will fill in rubric_dimensions and model_metadata.
+    initial_state = {
         "repo_url": repo_url,
         "pdf_path": pdf_path,
-        "rubric_dimensions": rubric["dimensions"],
+        "rubric_path": rubric_path,
+        "git_commit_hash": "",
+        "rubric_dimensions": [],
+        "synthesis_rules": {},
+        "model_metadata": {},
         "evidences": {},
         "opinions": [],
-        "final_report": None,
-        "synthesis_rules": rubric.get("synthesis_rules", {}),
-        "model_metadata": model_metadata,
-        "git_commit_hash": "",  # Will be set by repo_investigator
+        "final_report": "",
     }
-    
-    # Create and run interim graph
+
     try:
-        graph = create_interim_graph(rubric_path)
+        graph = create_interim_graph()
         final_state = graph.invoke(initial_state)
     except Exception as e:
         raise NodeExecutionError(
             "interim_graph",
-            f"Failed to execute interim audit: {str(e)}"
+            f"Failed to execute interim audit: {e}",
         ) from e
-    
-    # Validate state after execution
-    if not final_state.get("repo_url"):
-        raise StateValidationError("repo_url", "Missing after graph execution")
-    if not final_state.get("pdf_path"):
-        raise StateValidationError("pdf_path", "Missing after graph execution")
-    
-    # Validate and save evidence to JSON
-    evidences = final_state.get("evidences", {})
+
+    # Save evidence to JSON
+    _save_evidence_json(final_state, output_path)
+
+    return final_state
+
+
+def run_audit(
+    repo_url: str,
+    pdf_path: str,
+    rubric_path: str = "rubric.json",
+    output_path: Path = Path("audit/report_generated/audit_report.md"),
+) -> dict:
+    """Run the complete audit — detectives + judges + synthesis.
+
+    Args:
+        repo_url: GitHub repository URL to audit
+        pdf_path: Path to the PDF report
+        rubric_path: Path to rubric JSON
+        output_path: Where to save the final Markdown report
+
+    Returns:
+        Final state dictionary with audit report
+    """
+    initial_state = {
+        "repo_url": repo_url,
+        "pdf_path": pdf_path,
+        "rubric_path": rubric_path,
+        "git_commit_hash": "",
+        "rubric_dimensions": [],
+        "synthesis_rules": {},
+        "model_metadata": {},
+        "evidences": {},
+        "opinions": [],
+        "final_report": "",
+    }
+
+    try:
+        graph = create_auditor_graph()
+        final_state = graph.invoke(initial_state)
+    except Exception as e:
+        raise NodeExecutionError(
+            "full_graph",
+            f"Failed to execute audit: {e}",
+        ) from e
+
+    # Save report
+    report = final_state.get("final_report", "")
+    if report:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report, encoding="utf-8")
+        print(f"Audit report saved to: {output_path}")
+
+    return final_state
+
+
+# ──────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────
+
+def _save_evidence_json(state: dict, output_path: Path) -> None:
+    """Save collected evidence to a JSON file for inspection."""
+    evidences = state.get("evidences", {})
     if not evidences:
-        print("Warning: No evidence collected. Check detective node execution.")
-        return final_state
-    
+        print("Warning: No evidence collected.")
+        return
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Calculate statistics
-    total_evidences = sum(len(ev_list) for ev_list in evidences.values() if isinstance(ev_list, list))
-    evidence_sources = len(evidences)
-    
-    # Count by confidence levels
-    high_confidence = sum(
-        1 for ev_list in evidences.values()
-        if isinstance(ev_list, list)
-        for ev in ev_list
-        if hasattr(ev, "confidence") and ev.confidence > 0.7
-    )
-    medium_confidence = sum(
-        1 for ev_list in evidences.values()
-        if isinstance(ev_list, list)
-        for ev in ev_list
-        if hasattr(ev, "confidence") and 0.4 < ev.confidence <= 0.7
-    )
-    low_confidence = sum(
-        1 for ev_list in evidences.values()
-        if isinstance(ev_list, list)
-        for ev in ev_list
-        if hasattr(ev, "confidence") and ev.confidence <= 0.4
-    )
-    
-    # Count by found status
-    found_count = sum(
-        1 for ev_list in evidences.values()
-        if isinstance(ev_list, list)
-        for ev in ev_list
-        if hasattr(ev, "found") and ev.found
-    )
-    not_found_count = total_evidences - found_count
-    
-    # Count dimensions covered
-    dimension_ids_covered = set()
-    for ev_list in evidences.values():
-        if isinstance(ev_list, list):
-            for ev in ev_list:
-                if hasattr(ev, "criterion_id"):
-                    dimension_ids_covered.add(ev.criterion_id)
-    
-    # Build comprehensive evidence dictionary
+
+    # Serialize Evidence objects to dicts
     evidence_dict = {
         "metadata": {
-            "repo_url": repo_url,
-            "pdf_path": pdf_path,
-            "git_commit_hash": final_state.get("git_commit_hash", ""),
+            "repo_url": state.get("repo_url", ""),
+            "pdf_path": state.get("pdf_path", ""),
+            "git_commit_hash": state.get("git_commit_hash", ""),
             "timestamp": datetime.now().isoformat(),
-            "model_metadata": final_state.get("model_metadata", {}),
-        },
-        "statistics": {
-            "total_evidences": total_evidences,
-            "evidence_sources": evidence_sources,
-            "dimensions_covered": len(dimension_ids_covered),
-            "total_dimensions": len(final_state.get("rubric_dimensions", [])),
-            "confidence_distribution": {
-                "high": high_confidence,
-                "medium": medium_confidence,
-                "low": low_confidence,
-            },
-            "found_status": {
-                "found": found_count,
-                "not_found": not_found_count,
-            },
+            "model_metadata": state.get("model_metadata", {}),
         },
         "evidences": {
             source: [
@@ -426,145 +339,36 @@ def run_interim_audit(
                     "location": ev.location,
                     "confidence": ev.confidence,
                     "rationale": ev.rationale,
-                    "content": ev.content[:500] if ev.content and len(ev.content) > 500 else ev.content,  # Truncate long content
-                    "content_truncated": ev.content is not None and len(ev.content) > 500 if ev.content else False,
+                    # Save full content (up to 10000 chars as per Evidence model)
+                    # Truncate only if absolutely necessary for JSON file size
+                    "content": (ev.content[:10000] if ev.content else None),
                 }
-                for ev in evidence_list
+                for ev in ev_list
             ]
-            for source, evidence_list in evidences.items()
+            for source, ev_list in evidences.items()
+            if isinstance(ev_list, list)
         },
     }
-    
-    # Save to JSON
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(evidence_dict, f, indent=2, ensure_ascii=False)
-    
-    # Print summary
-    print(f"\n{'='*60}")
-    print("Interim Audit Summary")
-    print(f"{'='*60}")
-    print(f"Evidence Sources: {evidence_sources} (repo, doc, vision)")
-    print(f"Total Evidences: {total_evidences}")
-    print(f"Dimensions Covered: {len(dimension_ids_covered)}/{len(final_state.get('rubric_dimensions', []))}")
-    print(f"Confidence: High={high_confidence}, Medium={medium_confidence}, Low={low_confidence}")
-    print(f"Found Status: Found={found_count}, Not Found={not_found_count}")
-    print(f"Evidence saved to: {output_path}")
-    print(f"{'='*60}\n")
-    
-    return final_state
 
-
-def run_audit(
-    repo_url: str,
-    pdf_path: str,
-    rubric_path: Path = Path("rubric.json"),
-    output_path: Path = Path("audit/report_generated/audit_report.md"),
-) -> dict:
-    """Run the complete audit workflow.
-    
-    Args:
-        repo_url: GitHub repository URL to audit
-        pdf_path: Path to PDF report
-        rubric_path: Path to rubric JSON file
-        output_path: Path to save the audit report
-        
-    Returns:
-        Final state with audit report
-    """
-    # Import for final graph
-    from src.nodes.judges import defense_node, prosecutor_node, tech_lead_node
-    from src.nodes.justice import chief_justice_node
-    
-    # Load rubric
-    rubric = load_rubric(rubric_path)
-    
-    # Get model metadata for report
-    model_metadata = get_model_metadata()
-    
-    # Initialize state
-    initial_state: AgentState = {
-        "repo_url": repo_url,
-        "pdf_path": pdf_path,
-        "rubric_dimensions": rubric["dimensions"],
-        "evidences": {},
-        "opinions": [],
-        "final_report": None,
-        "synthesis_rules": rubric.get("synthesis_rules", {}),
-        "model_metadata": model_metadata,
-        "git_commit_hash": "",  # Will be set by repo_investigator
-    }
-    
-    # Create and run graph
-    graph = create_auditor_graph(rubric_path)
-    final_state = graph.invoke(initial_state)
-    
-    # Save report to markdown
-    if final_state.get("final_report"):
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        report_markdown = _serialize_report_to_markdown(final_state["final_report"])
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(report_markdown)
-        print(f"Audit report saved to: {output_path}")
-    
-    return final_state
-
-
-def _serialize_report_to_markdown(report) -> str:
-    """Serialize AuditReport to Markdown format."""
-    md_parts = [
-        report.executive_summary,
-        "",
-        "# Criterion Breakdown",
-        "",
-    ]
-    
-    for criterion in report.criteria:
-        md_parts.append(f"## {criterion.dimension_name}")
-        md_parts.append(f"**Final Score:** {criterion.final_score}/5")
-        md_parts.append("")
-        
-        # Judge opinions
-        md_parts.append("### Judicial Opinions")
-        for opinion in criterion.judge_opinions:
-            md_parts.append(f"**{opinion.judge}** (Score: {opinion.score}/5)")
-            md_parts.append(f"{opinion.argument}")
-            if opinion.cited_evidence:
-                md_parts.append(f"*Cited Evidence:* {', '.join(opinion.cited_evidence)}")
-            md_parts.append("")
-        
-        # Dissent summary
-        if criterion.dissent_summary:
-            md_parts.append("### Dissent Summary")
-            md_parts.append(criterion.dissent_summary)
-            md_parts.append("")
-        
-        # Remediation
-        md_parts.append("### Remediation")
-        md_parts.append(criterion.remediation)
-        md_parts.append("")
-        md_parts.append("---")
-        md_parts.append("")
-    
-    md_parts.append("# Comprehensive Remediation Plan")
-    md_parts.append("")
-    md_parts.append(report.remediation_plan)
-    
-    return "\n".join(md_parts)
+    # Print summary (ASCII-only to avoid Windows encoding issues)
+    total = sum(len(el) for el in evidences.values() if isinstance(el, list))
+    print(f"Evidence saved: {total} items from {len(evidences)} sources -> {output_path}")
 
 
 if __name__ == "__main__":
-    # Example usage
     import sys
-    
+
     if len(sys.argv) < 3:
         print("Usage: python -m src.graph <repo_url> <pdf_path> [--interim]")
         sys.exit(1)
-    
+
     repo_url = sys.argv[1]
     pdf_path = sys.argv[2]
-    is_interim = "--interim" in sys.argv
-    
-    if is_interim:
+
+    if "--interim" in sys.argv:
         run_interim_audit(repo_url, pdf_path)
     else:
         run_audit(repo_url, pdf_path)
