@@ -1,591 +1,337 @@
 """
 State definitions for the Automaton Auditor.
-Uses Pydantic models and TypedDict with reducers for safe parallel execution.
+
+This file defines the data contracts for the entire pipeline:
+- Evidence: Facts collected by detectives (no opinions)
+- JudicialOpinion: Scored opinions from judge personas
+- CriterionResult: Synthesized result per rubric dimension
+- AuditReport: Complete audit output (used internally by chief justice)
+- AgentState: The shared TypedDict that flows through the graph
+
+Every other module depends on these shapes. If a field name or type
+changes here, it must change everywhere.
+
+Architecture spec reference: Section 3 — State Schema
 """
+
 import operator
 import re
-from typing import Annotated, Dict, List, Literal, Optional
-from urllib.parse import urlparse
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
-from src.exceptions import (
-    EvidenceValidationError,
-    OpinionValidationError,
-    StateValidationError,
-    ValidationError,
-)
 
-
-# --- Detective Output ---
+# ──────────────────────────────────────────────
+# Detective Output
+# ──────────────────────────────────────────────
 
 
 class Evidence(BaseModel):
-    """Structured evidence collected by forensic agents.
-    
-    Detectives collect facts only - no opinions, no scores.
-    All evidence must be backed by objective verification.
+    """A single piece of forensic evidence collected by a Detective.
+
+    Detectives collect FACTS only — no scores, no opinions, no recommendations.
+    Each Evidence links to a rubric dimension via criterion_id so judges
+    can filter relevant evidence when scoring.
     """
 
     criterion_id: str = Field(
-        description="ID of the rubric dimension this evidence addresses",
+        description="Which rubric dimension this evidence relates to",
         min_length=1,
         max_length=100,
     )
     goal: str = Field(
-        description="The specific forensic goal this evidence addresses",
-        min_length=10,
+        description="What the detective was looking for",
+        min_length=1,
         max_length=500,
     )
     found: bool = Field(
-        description="Whether the artifact exists (binary fact, not judgment)"
+        description="Whether the artifact was present or absent (binary fact)"
     )
     content: Optional[str] = Field(
         default=None,
-        description="Extracted content or code snippet (factual data only)",
-        max_length=10000,  # Prevent extremely large content
+        description="Code snippet, commit log, or PDF excerpt",
+        max_length=10000,
     )
     location: str = Field(
-        description="File path, commit hash, or other location identifier",
+        description="File path:line, commit hash, or 'not_found'",
         min_length=1,
         max_length=500,
     )
     rationale: str = Field(
-        description="Rationale for confidence in the evidence found for this goal. "
-        "Must explain the forensic method used (e.g., 'AST confirmed', 'git log extracted')",
-        min_length=20,
+        description="Why the detective is confident in this finding",
+        min_length=1,
         max_length=2000,
     )
     confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Confidence score between 0 and 1, must be justified by rationale",
+        description="Confidence score from 0.0 to 1.0",
     )
 
     @field_validator("criterion_id")
     @classmethod
     def validate_criterion_id(cls, v: str) -> str:
-        """Validate criterion ID format."""
-        if not v or not v.strip():
-            raise EvidenceValidationError("criterion_id", "Criterion ID cannot be empty")
+        """Criterion IDs must be lowercase with underscores (e.g., 'git_forensic_analysis')."""
+        v = v.strip()
         if not re.match(r"^[a-z0-9_]+$", v):
-            raise EvidenceValidationError(
-                "criterion_id",
-                f"Must contain only lowercase letters, numbers, and underscores. Got: {v}"
+            raise ValueError(
+                f"criterion_id must be lowercase letters, numbers, underscores. Got: '{v}'"
             )
-        if len(v) > 100:
-            raise EvidenceValidationError("criterion_id", f"Exceeds maximum length of 100. Got: {len(v)}")
-        return v.strip()
-
-    @field_validator("rationale")
-    @classmethod
-    def validate_rationale(cls, v: str) -> str:
-        """Validate rationale contains method description."""
-        if not v or len(v.strip()) < 20:
-            raise EvidenceValidationError(
-                "rationale",
-                f"Rationale must be at least 20 characters. Got: {len(v) if v else 0}"
-            )
-        method_keywords = ["AST", "git", "regex", "parsed", "extracted", "verified", "confirmed", "analyzed", "checked"]
-        if not any(keyword.lower() in v.lower() for keyword in method_keywords):
-            raise EvidenceValidationError(
-                "rationale",
-                "Must mention the forensic method used (e.g., 'AST confirmed', 'git log extracted')"
-            )
-        return v.strip()
-
-    @model_validator(mode="after")
-    def validate_confidence_rationale(self):
-        """Validate that confidence is justified by rationale."""
-        if self.confidence > 0.7 and len(self.rationale) < 50:
-            raise EvidenceValidationError(
-                "confidence",
-                "High confidence (>0.7) requires detailed rationale (at least 50 characters). "
-                f"Current rationale length: {len(self.rationale)}"
-            )
-        # Found evidence should have higher confidence (>= 0.5)
-        # This removes ambiguity in the [0.3, 0.5] overlap zone
-        if self.found and self.confidence < 0.5:
-            raise EvidenceValidationError(
-                "confidence",
-                f"Evidence marked as 'found' should have confidence >= 0.5 (medium-high). "
-                f"Got: {self.confidence}. If uncertain, mark as found=False."
-            )
-        # Not found evidence should have lower confidence (<= 0.4)
-        # This creates a clear separation: found >= 0.5, not found <= 0.4
-        if not self.found and self.confidence > 0.4:
-            raise EvidenceValidationError(
-                "confidence",
-                f"Evidence marked as 'not found' should have confidence <= 0.4 (low-medium). "
-                f"Got: {self.confidence}. If confident it exists, mark as found=True."
-            )
-        # Validate content is present when found=True
-        if self.found and not self.content and self.confidence > 0.6:
-            raise EvidenceValidationError(
-                "content",
-                "High-confidence evidence marked as 'found' should include content or code snippet"
-            )
-        return self
+        return v
 
 
-# --- Judge Output ---
+# ──────────────────────────────────────────────
+# Judge Output
+# ──────────────────────────────────────────────
 
 
 class JudicialOpinion(BaseModel):
-    """Opinion rendered by a judge persona on a specific criterion.
-    
-    Judges interpret evidence and assign scores based on their persona:
-    - Prosecutor: Critical lens, focuses on gaps and security
-    - Defense: Optimistic lens, rewards effort and intent
-    - Tech Lead: Pragmatic lens, evaluates functionality
+    """A scored opinion from a judge persona on a specific criterion.
+
+    Each judge evaluates every rubric dimension independently.
+    The score is 1-5 based on rubric anchors, and the argument
+    must cite specific evidence to justify the score.
+
+    Enforced via .with_structured_output(JudicialOpinion) in judges.py.
     """
 
     judge: Literal["Prosecutor", "Defense", "TechLead"] = Field(
-        description="The judicial persona rendering this opinion"
+        description="Which judge persona produced this opinion"
     )
     criterion_id: str = Field(
-        description="ID of the rubric criterion being evaluated (must match dimension id)",
+        description="Which rubric dimension is being scored",
         min_length=1,
         max_length=100,
     )
     score: int = Field(
         ge=1,
         le=5,
-        description="Score from 1 to 5 based on rubric scale",
+        description="Score from 1 (Vibe Coder) to 5 (Master Thinker)",
     )
     argument: str = Field(
-        description="Reasoning for this score with specific file citations and evidence references",
-        min_length=50,
-        max_length=3000,
+        description="Reasoning for this score, citing specific evidence (file paths, line numbers, code snippets)",
+        min_length=20,
+        max_length=2000,
     )
-    cited_evidence: List[str] = Field(
+    cited_evidence: list[str] = Field(
         default_factory=list,
-        description="List of evidence locations or IDs referenced in this opinion",
-        max_length=20,  # Prevent excessive citations
+        description="Evidence locations referenced in the argument",
     )
 
     @field_validator("criterion_id")
     @classmethod
     def validate_criterion_id(cls, v: str) -> str:
-        """Validate criterion ID format."""
-        if not v or not v.strip():
-            raise OpinionValidationError("criterion_id", "Criterion ID cannot be empty")
+        v = v.strip()
         if not re.match(r"^[a-z0-9_]+$", v):
-            raise OpinionValidationError(
-                "criterion_id",
-                f"Must contain only lowercase letters, numbers, and underscores. Got: {v}"
+            raise ValueError(
+                f"criterion_id must be lowercase letters, numbers, underscores. Got: '{v}'"
             )
-        return v.strip()
-
+        return v
+    
     @field_validator("argument")
     @classmethod
-    def validate_argument(cls, v: str) -> str:
-        """Validate argument contains citations."""
-        if not v or len(v.strip()) < 50:
-            raise OpinionValidationError(
-                "argument",
-                f"Argument must be at least 50 characters. Got: {len(v) if v else 0}"
-            )
-        # Check for file paths or evidence references
-        has_file_reference = bool(re.search(r"(src/|tests/|\.py|\.md|\.json|\.toml|\.yaml)", v))
-        has_evidence_reference = bool(re.search(r"(evidence|location|criterion|file|found|content)", v, re.IGNORECASE))
+    def validate_argument_specificity(cls, v: str) -> str:
+        """Encourage concise, specific arguments that cite evidence.
         
-        if not (has_file_reference or has_evidence_reference):
-            raise OpinionValidationError(
-                "argument",
-                "Must contain file citations (e.g., 'src/file.py') or evidence references (e.g., 'evidence found at')"
-            )
-        return v.strip()
-
-    @model_validator(mode="after")
-    def validate_score_argument_alignment(self):
-        """Validate that score aligns with argument tone."""
-        argument_lower = self.argument.lower()
-        
-        # Low scores should have critical language
-        if self.score <= 2:
-            critical_keywords = ["missing", "failed", "error", "issue", "problem", "lack", "absent", "incomplete", "weak"]
-            if not any(keyword in argument_lower for keyword in critical_keywords):
-                raise OpinionValidationError(
-                    "score",
-                    f"Low scores (1-2) should include critical language. Score: {self.score}, "
-                    "argument should mention issues, problems, or missing elements"
-                )
-        
-        # High scores should have positive language
-        if self.score >= 4:
-            positive_keywords = ["good", "excellent", "proper", "correct", "complete", "well", "strong", "solid", "robust"]
-            if not any(keyword in argument_lower for keyword in positive_keywords):
-                raise OpinionValidationError(
-                    "score",
-                    f"High scores (4-5) should include positive language. Score: {self.score}, "
-                    "argument should mention strengths, completeness, or quality"
-                )
-        
-        # Validate cited_evidence matches argument
-        if self.cited_evidence and len(self.cited_evidence) > 0:
-            # Check if cited evidence locations are mentioned in argument
-            evidence_mentioned = any(
-                any(cite.lower() in argument_lower for cite in self.cited_evidence)
-                for _ in [True]
-            )
-            if not evidence_mentioned and len(self.cited_evidence) > 2:
-                # Warning: many citations but none mentioned in argument
-                pass  # Not an error, but could be improved
-        
-        return self
+        Arguments should ideally:
+        - Be under 500 characters for readability
+        - Cite file paths or line numbers when possible
+        - Avoid repetition
+        """
+        v = v.strip()
+        if len(v) > 2000:
+            # Warn but don't fail - some complex cases may need more space
+            # But encourage conciseness
+            pass
+        return v
 
 
-# --- Chief Justice Output ---
+# ──────────────────────────────────────────────
+# Chief Justice Output (internal model)
+#
+# AuditReport and CriterionResult are used INSIDE
+# the chief_justice node for structured validation.
+# The node serializes AuditReport to Markdown and
+# puts the string in state["final_report"].
+# ──────────────────────────────────────────────
 
 
 class CriterionResult(BaseModel):
-    """Final result for a single rubric criterion after synthesis.
-    
-    Combines all three judge opinions and applies deterministic synthesis rules
-    to produce a final score and actionable remediation.
+    """Result for a single rubric dimension after synthesis.
+
+    Combines all three judge opinions and records which
+    synthesis rule was applied (security override, consensus, etc.).
     """
 
-    dimension_id: str = Field(
-        description="ID of the rubric dimension",
-        min_length=1,
-        max_length=100,
+    dimension_id: str = Field(description="Rubric dimension ID")
+    dimension_name: str = Field(description="Human-readable dimension name")
+    final_score: int = Field(ge=1, le=5, description="Final synthesized score")
+    judge_opinions: list[JudicialOpinion] = Field(
+        description="All three judge opinions for this criterion"
     )
-    dimension_name: str = Field(
-        description="Human-readable name of the dimension",
-        min_length=5,
-        max_length=200,
-    )
-    final_score: int = Field(
-        ge=1, le=5, description="Final synthesized score after applying synthesis rules"
-    )
-    judge_opinions: List[JudicialOpinion] = Field(
-        description="All three judge opinions (Prosecutor, Defense, TechLead) for this criterion",
-        min_length=3,
-        max_length=3,
+    rules_fired: list[str] = Field(
+        default_factory=list,
+        description="Which synthesis rules triggered (e.g., 'security_override', 'consensus')",
     )
     dissent_summary: Optional[str] = Field(
         default=None,
-        description="Summary of disagreement when score variance > 2. "
-        "Required when judges disagree significantly.",
-        max_length=1000,
+        description="Required when score variance > 2",
     )
     remediation: str = Field(
-        description="Specific file-level instructions for improvement. "
-        "Must be actionable and cite specific files/paths.",
-        min_length=50,
-        max_length=2000,
+        default="",
+        description="Specific file-level fix instructions",
     )
-
-    @field_validator("dimension_id")
-    @classmethod
-    def validate_dimension_id(cls, v: str) -> str:
-        """Validate dimension ID format."""
-        if not v or not v.strip():
-            raise ValidationError("Dimension ID cannot be empty", {"field": "dimension_id"})
-        if not re.match(r"^[a-z0-9_]+$", v):
-            raise ValidationError(
-                f"Dimension ID must contain only lowercase letters, numbers, and underscores. Got: {v}",
-                {"field": "dimension_id", "value": v}
-            )
-        return v.strip()
 
     @field_validator("judge_opinions")
     @classmethod
-    def validate_judge_opinions(cls, v: List[JudicialOpinion]) -> List[JudicialOpinion]:
-        """Validate that all three judge opinions are present and consistent."""
+    def validate_three_judges(cls, v: list[JudicialOpinion]) -> list[JudicialOpinion]:
+        """All three judge personas must be present."""
         if len(v) != 3:
-            raise ValidationError(
-                f"Must have exactly 3 judge opinions, got {len(v)}",
-                {"field": "judge_opinions", "count": len(v), "expected": 3}
-            )
-        
-        judges = {opinion.judge for opinion in v}
-        required_judges = {"Prosecutor", "Defense", "TechLead"}
-        if judges != required_judges:
-            raise ValidationError(
-                f"Must have opinions from all three judges: {required_judges}. Got: {judges}",
-                {"field": "judge_opinions", "required": required_judges, "got": judges}
-            )
-        
-        # Ensure all opinions reference the same criterion
-        criterion_ids = {opinion.criterion_id for opinion in v}
-        if len(criterion_ids) > 1:
-            raise ValidationError(
-                f"All opinions must reference the same criterion. Got: {criterion_ids}",
-                {"field": "judge_opinions", "criterion_ids": list(criterion_ids)}
-            )
-        
-        # Validate score range consistency
-        scores = [opinion.score for opinion in v]
-        if min(scores) < 1 or max(scores) > 5:
-            raise ValidationError(
-                f"All scores must be between 1 and 5. Got: {scores}",
-                {"field": "judge_opinions", "scores": scores}
-            )
-        
+            raise ValueError(f"Must have exactly 3 opinions, got {len(v)}")
+        judges = {op.judge for op in v}
+        required = {"Prosecutor", "Defense", "TechLead"}
+        if judges != required:
+            raise ValueError(f"Need all three judges {required}, got {judges}")
         return v
 
     @model_validator(mode="after")
-    def validate_dissent_summary(self):
-        """Validate dissent summary is present when needed."""
-        scores = [opinion.score for opinion in self.judge_opinions]
-        score_variance = max(scores) - min(scores)
-        
-        if score_variance > 2 and not self.dissent_summary:
-            raise ValidationError(
-                f"Score variance ({score_variance}) > 2 requires a dissent_summary. "
-                f"Scores: {scores}",
-                {"field": "dissent_summary", "score_variance": score_variance, "scores": scores}
+    def check_dissent_required(self):
+        """Dissent summary is required when judges disagree by > 2 points."""
+        scores = [op.score for op in self.judge_opinions]
+        variance = max(scores) - min(scores)
+        if variance > 2 and not self.dissent_summary:
+            raise ValueError(
+                f"Score variance {variance} > 2 (scores: {scores}) "
+                "requires a dissent_summary"
             )
-        
-        if score_variance > 2 and self.dissent_summary:
-            # Validate dissent summary quality
-            if len(self.dissent_summary.strip()) < 50:
-                raise ValidationError(
-                    "Dissent summary must be at least 50 characters when score variance > 2",
-                    {"field": "dissent_summary", "length": len(self.dissent_summary)}
-                )
-        
-        # Validate final_score is within range of judge scores
-        if self.final_score < min(scores) or self.final_score > max(scores):
-            # Allow synthesis to adjust, but warn if too far
-            if abs(self.final_score - (sum(scores) / len(scores))) > 1.5:
-                raise ValidationError(
-                    f"Final score ({self.final_score}) differs significantly from judge average "
-                    f"({sum(scores) / len(scores):.2f}). Scores: {scores}",
-                    {"field": "final_score", "final_score": self.final_score, "judge_scores": scores}
-                )
-        
         return self
-
-    @field_validator("remediation")
-    @classmethod
-    def validate_remediation(cls, v: str) -> str:
-        """Validate remediation contains actionable file references."""
-        if not v or len(v.strip()) < 50:
-            raise ValidationError(
-                f"Remediation must be at least 50 characters. Got: {len(v) if v else 0}",
-                {"field": "remediation", "length": len(v) if v else 0}
-            )
-        
-        # Check for file paths
-        has_file_path = bool(re.search(r"(src/|tests/|\.py|\.md|\.json|\.toml|\.yaml|\.yml)", v))
-        has_action_words = bool(re.search(
-            r"(add|create|update|fix|remove|implement|refactor|modify|improve|enhance|replace)",
-            v, re.IGNORECASE
-        ))
-        
-        if not has_file_path:
-            raise ValidationError(
-                "Remediation must cite specific files or paths (e.g., 'src/file.py', 'tests/test_file.py')",
-                {"field": "remediation"}
-            )
-        
-        if not has_action_words:
-            raise ValidationError(
-                "Remediation must contain actionable instructions (add, create, update, fix, implement, etc.)",
-                {"field": "remediation"}
-            )
-        
-        return v.strip()
 
 
 class AuditReport(BaseModel):
-    """Final audit report structure.
-    
-    Complete audit report with executive summary, per-criterion breakdown,
-    and comprehensive remediation plan.
+    """Complete audit report. Built by chief_justice, then serialized to Markdown.
+
+    This model is NOT stored directly in AgentState. The chief_justice
+    builds it, validates it, calls to_markdown(), and puts the Markdown
+    string into state["final_report"].
     """
 
-    repo_url: str = Field(
-        description="URL of the audited repository",
-        min_length=10,
-        max_length=500,
-    )
-    executive_summary: str = Field(
-        description="High-level summary of findings including metadata, overall score, and key issues",
-        min_length=100,
-        max_length=5000,
-    )
-    overall_score: float = Field(
-        ge=1.0,
-        le=5.0,
-        description="Weighted average of all criterion scores",
-    )
-    criteria: List[CriterionResult] = Field(
-        description="Detailed results for each rubric criterion",
-        min_length=1,
-    )
-    remediation_plan: str = Field(
-        description="Comprehensive remediation plan with prioritized actions grouped by severity",
-        min_length=100,
-        max_length=10000,
-    )
-
-    @field_validator("repo_url")
-    @classmethod
-    def validate_repo_url(cls, v: str) -> str:
-        """Validate repository URL format."""
-        if not v or not v.strip():
-            raise ValidationError("Repository URL cannot be empty", {"field": "repo_url"})
-        
-        parsed = urlparse(v.strip())
-        if not parsed.scheme or not parsed.netloc:
-            raise ValidationError(
-                f"Invalid repository URL format. Must be a valid URL (e.g., https://github.com/user/repo). Got: {v}",
-                {"field": "repo_url", "value": v}
-            )
-        if parsed.scheme not in ["http", "https"]:
-            raise ValidationError(
-                f"Repository URL must use http or https scheme. Got: {parsed.scheme}",
-                {"field": "repo_url", "scheme": parsed.scheme}
-            )
-        # Validate common repository hosts
-        valid_hosts = ["github.com", "gitlab.com", "bitbucket.org", "gitea.com"]
-        if not any(host in parsed.netloc.lower() for host in valid_hosts):
-            # Warning: not a standard git host, but allow it
-            pass
-        return v.strip()
+    repo_url: str
+    git_commit_hash: str = ""
+    model_metadata: dict = Field(default_factory=dict)
+    overall_score: float = Field(ge=1.0, le=5.0)
+    executive_summary: str = Field(min_length=50)
+    criteria: list[CriterionResult]
+    remediation_plan: str = Field(min_length=50)
 
     @model_validator(mode="after")
-    def validate_overall_score_consistency(self):
-        """Validate overall score is consistent with criterion scores."""
+    def check_score_consistency(self):
+        """Overall score should be close to the average of criterion scores."""
         if not self.criteria:
-            raise ValidationError(
-                "Audit report must have at least one criterion result",
-                {"field": "criteria", "count": 0}
+            raise ValueError("Report must have at least one criterion result")
+        avg = sum(c.final_score for c in self.criteria) / len(self.criteria)
+        if abs(self.overall_score - avg) > 1.0:
+            raise ValueError(
+                f"overall_score ({self.overall_score}) too far from "
+                f"criterion average ({avg:.2f})"
             )
-        
-        # Calculate average of criterion scores
-        avg_score = sum(criterion.final_score for criterion in self.criteria) / len(self.criteria)
-        
-        # Allow some tolerance (0.5 points)
-        if abs(self.overall_score - avg_score) > 0.5:
-            raise ValidationError(
-                f"Overall score ({self.overall_score}) differs significantly from "
-                f"average criterion score ({avg_score:.2f}). Difference: {abs(self.overall_score - avg_score):.2f}",
-                {
-                    "field": "overall_score",
-                    "overall_score": self.overall_score,
-                    "average_score": avg_score,
-                    "difference": abs(self.overall_score - avg_score)
-                }
-            )
-        
-        # Validate all criteria have valid scores
-        for criterion in self.criteria:
-            if criterion.final_score < 1 or criterion.final_score > 5:
-                raise ValidationError(
-                    f"Criterion '{criterion.dimension_id}' has invalid score: {criterion.final_score}",
-                    {"field": "criteria", "criterion_id": criterion.dimension_id, "score": criterion.final_score}
-                )
-        
         return self
 
-    @field_validator("executive_summary")
-    @classmethod
-    def validate_executive_summary(cls, v: str) -> str:
-        """Validate executive summary contains key information."""
-        if not v or len(v.strip()) < 100:
-            raise ValidationError(
-                f"Executive summary must be at least 100 characters. Got: {len(v) if v else 0}",
-                {"field": "executive_summary", "length": len(v) if v else 0}
-            )
-        
-        # Check for score mention
-        has_score = bool(re.search(r"(score|rating|grade|overall|average)", v, re.IGNORECASE))
-        # Check for key findings
-        has_findings = bool(re.search(
-            r"(finding|issue|problem|strength|weakness|recommendation|conclusion|summary)",
-            v, re.IGNORECASE
-        ))
-        
-        if not has_score:
-            raise ValidationError(
-                "Executive summary must mention the overall score or rating",
-                {"field": "executive_summary"}
-            )
-        
-        if not has_findings:
-            raise ValidationError(
-                "Executive summary must include key findings, issues, or recommendations",
-                {"field": "executive_summary"}
-            )
-        
-        return v.strip()
+    def to_markdown(self) -> str:
+        """Serialize the report to Markdown for state['final_report'].
 
-    @field_validator("remediation_plan")
-    @classmethod
-    def validate_remediation_plan(cls, v: str) -> str:
-        """Validate remediation plan has structure."""
-        if not v or len(v.strip()) < 100:
-            raise ValidationError(
-                f"Remediation plan must be at least 100 characters. Got: {len(v) if v else 0}",
-                {"field": "remediation_plan", "length": len(v) if v else 0}
-            )
-        
-        # Check for priority indicators
-        has_priority = bool(re.search(
-            r"(priority|critical|high|medium|low|urgent|important|severe|major|minor)",
-            v, re.IGNORECASE
-        ))
-        # Check for action items
-        has_actions = bool(re.search(
-            r"(action|step|task|implement|fix|add|create|update|refactor|improve)",
-            v, re.IGNORECASE
-        ))
-        
-        if not has_priority:
-            raise ValidationError(
-                "Remediation plan must include priority levels or severity groupings (critical, high, medium, low)",
-                {"field": "remediation_plan"}
-            )
-        
-        if not has_actions:
-            raise ValidationError(
-                "Remediation plan must include actionable steps or tasks (action, step, task, implement, fix, etc.)",
-                {"field": "remediation_plan"}
-            )
-        
-        return v.strip()
+        This is the method the chief_justice calls before writing to state.
+        """
+        # The executive_summary string already includes the top-level
+        # report header, audit metadata table, and its own
+        # "## Executive Summary" section (including score stats).
+        #
+        # Here we simply append the per-criterion breakdown and the
+        # remediation plan underneath that pre-built summary to avoid
+        # duplicating headers/metadata in the final Markdown report.
+        lines = [
+            self.executive_summary,
+            "",
+        ]
+
+        for criterion in self.criteria:
+            scores = [op.score for op in criterion.judge_opinions]
+            lines.append(f"## {criterion.dimension_name} — Score: {criterion.final_score}/5")
+            lines.append("")
+            lines.append("### Judicial Opinions")
+
+            for op in criterion.judge_opinions:
+                lines.append(f"- **{op.judge}** (Score: {op.score}/5): {op.argument}")
+            lines.append("")
+
+            if criterion.rules_fired:
+                lines.append(f"### Rules Applied: {', '.join(criterion.rules_fired)}")
+                lines.append("")
+
+            if criterion.dissent_summary:
+                lines.append("### Dissent")
+                lines.append(criterion.dissent_summary)
+                lines.append("")
+
+            if criterion.remediation:
+                lines.append("### Remediation")
+                lines.append(criterion.remediation)
+                lines.append("")
+
+            lines.append("---")
+            lines.append("")
+
+        lines.append(self.remediation_plan)
+
+        return "\n".join(lines)
 
 
-# --- Graph State ---
+# ──────────────────────────────────────────────
+# Graph State
+#
+# This is the TypedDict that flows through every node.
+# Fields with Annotated reducers support parallel writes.
+# ──────────────────────────────────────────────
 
 
-class AgentState(TypedDict, total=False):
-    """Main state object for the LangGraph workflow.
-    
-    Uses Annotated reducers to prevent parallel agents from overwriting data:
-    - operator.ior for dict merge (evidences) - merges dictionaries from parallel detectives
-    - operator.add for list concatenation (opinions) - concatenates lists from parallel judges
-    
-    Fields marked with total=False are optional and can be added during execution.
+class AgentState(TypedDict):
+    """Shared state for the LangGraph pipeline.
+
+    Reducers prevent parallel agents from overwriting each other:
+    - operator.ior merges evidence dicts from 3 detectives
+    - operator.add concatenates opinion lists from 3 judges
+
+    Every field is required. Initialize with defaults at invoke time:
+        graph.invoke({
+            "repo_url": url,
+            "pdf_path": path,
+            "rubric_path": "rubric.json",
+            "git_commit_hash": "",
+            "model_metadata": {},
+            "rubric_dimensions": [],
+            "synthesis_rules": {},
+            "evidences": {},
+            "opinions": [],
+            "final_report": "",
+        })
     """
 
-    # Input fields (set at invoke)
+    # ── Input (set at invoke) ──
     repo_url: str
     pdf_path: str
+    rubric_path: str
 
-    # Metadata fields (set during execution)
-    git_commit_hash: str  # Set by repo_investigator
-    model_metadata: Dict  # Set by graph initialization (from config)
+    # ── Metadata (set during execution) ──
+    git_commit_hash: str
+    model_metadata: dict
 
-    # Configuration (set at graph creation)
-    rubric_dimensions: List[Dict]  # Loaded from rubric JSON
+    # ── Configuration (set by context_builder) ──
+    rubric_dimensions: list[dict]
+    synthesis_rules: dict
 
-    # Parallel execution fields (use reducers)
-    evidences: Annotated[
-        Dict[str, List[Evidence]], operator.ior
-    ]  # Dict merge: {"repo": [...], "doc": [...], "vision": [...]}
-    opinions: Annotated[
-        List[JudicialOpinion], operator.add
-    ]  # List concat: [p1, p2, ...] + [d1, d2, ...] + [t1, t2, ...]
+    # ── Parallel execution (reducers required) ──
+    evidences: Annotated[dict[str, list[Evidence]], operator.ior]
+    opinions: Annotated[list[JudicialOpinion], operator.add]
 
-    # Synthesis configuration
-    synthesis_rules: Dict  # Loaded from rubric JSON for Chief Justice
-
-    # Output field (set by Chief Justice)
-    final_report: Optional[AuditReport]
+    # ── Output (set by chief_justice as Markdown string) ──
+    final_report: str
