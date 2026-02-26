@@ -6,34 +6,39 @@ import ast
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from src.tools.file_finder import find_file_recursive, find_file_fuzzy
+
 
 def check_stategraph(repo_path: Path) -> Dict:
     """Check for LangGraph StateGraph instantiation using AST.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with StateGraph analysis results
     """
-    graph_file = repo_path / "src" / "graph.py"
-    if not graph_file.exists():
-        # Try alternative locations
-        graph_file = repo_path / "graph.py"
-        if not graph_file.exists():
+    graph_file = find_file_recursive(repo_path, "graph.py")
+
+    if not graph_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "graph")
+        if fuzzy_matches:
+            graph_file = fuzzy_matches[0]
+        else:
             return {
                 "found": False,
-                "error": "graph.py not found",
+                "error": "graph.py not found (searched recursively)",
+                "searched_locations": ["src/graph.py", "graph.py", "lib/graph.py"],
             }
 
     try:
         with open(graph_file, "r", encoding="utf-8") as f:
             source_code = f.read()
-        
+
         tree = ast.parse(source_code)
         analyzer = StateGraphAnalyzer()
         analyzer.visit(tree)
-        
+
         return analyzer.get_results()
     except SyntaxError as e:
         return {
@@ -49,32 +54,35 @@ def check_stategraph(repo_path: Path) -> Dict:
 
 def check_pydantic_models(repo_path: Path) -> Dict:
     """Check for Pydantic models using AST.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with Pydantic model analysis
     """
-    state_file = repo_path / "src" / "state.py"
-    if not state_file.exists():
-        # Try alternative locations
-        state_file = repo_path / "state.py"
-        if not state_file.exists():
+    state_file = find_file_recursive(repo_path, "state.py")
+
+    if not state_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "state")
+        if fuzzy_matches:
+            state_file = fuzzy_matches[0]
+        else:
             return {
                 "found": False,
                 "has_pydantic": False,
                 "has_reducers": False,
+                "error": "state.py not found (searched recursively)",
             }
 
     try:
         with open(state_file, "r", encoding="utf-8") as f:
             source_code = f.read()
-        
+
         tree = ast.parse(source_code)
         analyzer = PydanticAnalyzer()
         analyzer.visit(tree)
-        
+
         return analyzer.get_results()
     except Exception as e:
         return {
@@ -85,30 +93,34 @@ def check_pydantic_models(repo_path: Path) -> Dict:
 
 def check_parallel_edges(repo_path: Path) -> Dict:
     """Check for parallel fan-out/fan-in patterns using AST.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with parallel edge analysis
     """
-    graph_file = repo_path / "src" / "graph.py"
-    if not graph_file.exists():
-        graph_file = repo_path / "graph.py"
-        if not graph_file.exists():
+    graph_file = find_file_recursive(repo_path, "graph.py")
+
+    if not graph_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "graph")
+        if fuzzy_matches:
+            graph_file = fuzzy_matches[0]
+        else:
             return {
                 "found": False,
                 "has_parallel_edges": False,
+                "error": "graph.py not found (searched recursively)",
             }
 
     try:
         with open(graph_file, "r", encoding="utf-8") as f:
             source_code = f.read()
-        
+
         tree = ast.parse(source_code)
         analyzer = ParallelEdgeAnalyzer()
         analyzer.visit(tree)
-        
+
         return analyzer.get_results()
     except Exception as e:
         return {
@@ -119,10 +131,10 @@ def check_parallel_edges(repo_path: Path) -> Dict:
 
 def check_sandboxing(repo_path: Path) -> Dict:
     """Check for proper sandboxing in tool implementations.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with sandboxing analysis
     """
@@ -137,30 +149,28 @@ def check_sandboxing(repo_path: Path) -> Dict:
     has_sandboxing = False
     has_os_system = False
     uses_subprocess = False
-    
+
     for tool_file in tools_dir.glob("*.py"):
         try:
             with open(tool_file, "r", encoding="utf-8") as f:
                 content = f.read()
-            
-            # AST-based check for tempfile usage
+
             try:
                 tree = ast.parse(content)
                 tempfile_checker = SandboxingAnalyzer()
                 tempfile_checker.visit(tree)
                 if tempfile_checker.has_tempfile:
                     has_sandboxing = True
-            except:
+            except Exception:
                 pass
-            
-            # Check for forbidden patterns
+
             if "os.system" in content:
                 has_os_system = True
             if "subprocess.run" in content or "subprocess.Popen" in content:
                 uses_subprocess = True
         except Exception:
             continue
-    
+
     return {
         "found": True,
         "has_sandboxing": has_sandboxing,
@@ -172,34 +182,38 @@ def check_sandboxing(repo_path: Path) -> Dict:
 
 def check_structured_output(repo_path: Path) -> Dict:
     """Check for structured output enforcement in judge nodes.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with structured output analysis
     """
-    judges_file = repo_path / "src" / "nodes" / "judges.py"
-    if not judges_file.exists():
-        return {
-            "found": False,
-            "has_structured_output": False,
-        }
+    judges_file = find_file_recursive(repo_path, "judges.py")
+
+    if not judges_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "judge")
+        if fuzzy_matches:
+            judges_file = fuzzy_matches[0]
+        else:
+            return {
+                "found": False,
+                "has_structured_output": False,
+                "error": "judges.py not found (searched recursively)",
+            }
 
     try:
         with open(judges_file, "r", encoding="utf-8") as f:
             source_code = f.read()
-        
-        # AST-based check
+
         tree = ast.parse(source_code)
         analyzer = StructuredOutputAnalyzer()
         analyzer.visit(tree)
-        
-        # Also check for string patterns
+
         has_with_structured = ".with_structured_output" in source_code
         has_bind_tools = ".bind_tools" in source_code
         has_pydantic_validation = "JudicialOpinion" in source_code
-        
+
         return {
             "found": True,
             "has_structured_output": analyzer.has_structured_output or has_with_structured or has_bind_tools,
@@ -218,10 +232,10 @@ def check_structured_output(repo_path: Path) -> Dict:
 
 def check_security(repo_path: Path) -> Dict:
     """Comprehensive security check for forbidden patterns.
-    
+
     Args:
         repo_path: Path to the cloned repository
-        
+
     Returns:
         Dictionary with security analysis
     """
@@ -233,20 +247,19 @@ def check_security(repo_path: Path) -> Dict:
         }
 
     security_issues = []
-    
+
     for py_file in src_dir.rglob("*.py"):
         try:
             with open(py_file, "r", encoding="utf-8") as f:
                 content = f.read()
-            
-            # Check for forbidden patterns
+
             if "os.system" in content:
                 security_issues.append({
                     "file": str(py_file.relative_to(repo_path)),
                     "issue": "os.system() detected - security violation",
                     "severity": "high",
                 })
-            
+
             if "eval(" in content or "exec(" in content:
                 security_issues.append({
                     "file": str(py_file.relative_to(repo_path)),
@@ -255,7 +268,7 @@ def check_security(repo_path: Path) -> Dict:
                 })
         except Exception:
             continue
-    
+
     return {
         "found": True,
         "security_issues": security_issues,
@@ -263,7 +276,197 @@ def check_security(repo_path: Path) -> Dict:
     }
 
 
+# ──────────────────────────────────────────────
+# NEW: Judicial nuance check
+# ──────────────────────────────────────────────
+
+def check_judge_prompt_diversity(repo_path: Path) -> Dict:
+    """Check that judge nodes use distinct personas/prompts (not copy-paste).
+
+    Looks for:
+    - Multiple judge functions or a factory with distinct persona parameters
+    - Distinct system prompts per judge (Prosecutor, Defense, TechLead)
+    - Persona-specific keywords in prompts (e.g. "security", "merit", "pragmatic")
+
+    Args:
+        repo_path: Path to the cloned repository
+
+    Returns:
+        Dictionary with judicial nuance analysis
+    """
+    judges_file = find_file_recursive(repo_path, "judges.py")
+
+    if not judges_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "judge")
+        if fuzzy_matches:
+            judges_file = fuzzy_matches[0]
+        else:
+            return {
+                "found": False,
+                "has_diverse_prompts": False,
+                "error": "judges.py not found (searched recursively)",
+            }
+
+    try:
+        with open(judges_file, "r", encoding="utf-8") as f:
+            source_code = f.read()
+
+        tree = ast.parse(source_code)
+        analyzer = JudgePromptAnalyzer()
+        analyzer.visit(tree)
+
+        results = analyzer.get_results()
+
+        # Also do string-level checks for persona keywords
+        source_lower = source_code.lower()
+
+        persona_keywords = {
+            "prosecutor": [
+                "prosecutor", "prosecution", "flaw", "violation",
+                "security", "weakness", "gap", "missing",
+            ],
+            "defense": [
+                "defense", "defence", "merit", "strength",
+                "mitigating", "credit", "positive", "achievement",
+            ],
+            "tech_lead": [
+                "tech lead", "techlead", "pragmatic", "engineering",
+                "architecture", "implementation", "practical", "maintainab",
+            ],
+        }
+
+        personas_found = {}
+        for persona, keywords in persona_keywords.items():
+            hits = [kw for kw in keywords if kw in source_lower]
+            personas_found[persona] = {
+                "keyword_hits": len(hits),
+                "keywords_matched": hits,
+            }
+
+        distinct_personas = sum(
+            1 for p in personas_found.values() if p["keyword_hits"] >= 2
+        )
+
+        results["persona_analysis"] = personas_found
+        results["distinct_personas_detected"] = distinct_personas
+        results["has_diverse_prompts"] = (
+            results.get("has_diverse_prompts", False) or distinct_personas >= 2
+        )
+
+        return results
+
+    except Exception as e:
+        return {
+            "found": True,
+            "has_diverse_prompts": False,
+            "error": str(e),
+        }
+
+
+# ──────────────────────────────────────────────
+# NEW: Chief Justice synthesis rules check
+# ──────────────────────────────────────────────
+
+def check_synthesis_rules(repo_path: Path) -> Dict:
+    """Check for deterministic synthesis rules in Chief Justice node.
+
+    Looks for:
+    - A dedicated justice/synthesis file
+    - Conditional score resolution logic (if/elif chains, match/case)
+    - Specific rule patterns: security override, variance handling, weighted avg
+    - Absence of LLM calls (synthesis should be deterministic, not LLM-based)
+
+    Args:
+        repo_path: Path to the cloned repository
+
+    Returns:
+        Dictionary with synthesis rules analysis
+    """
+    # Search for justice.py, chief_justice.py, synthesis.py
+    justice_file = None
+    for filename in ["justice.py", "chief_justice.py", "synthesis.py"]:
+        justice_file = find_file_recursive(repo_path, filename)
+        if justice_file:
+            break
+
+    if not justice_file:
+        fuzzy_matches = find_file_fuzzy(repo_path, "justice")
+        if not fuzzy_matches:
+            fuzzy_matches = find_file_fuzzy(repo_path, "synthesis")
+        if fuzzy_matches:
+            justice_file = fuzzy_matches[0]
+        else:
+            return {
+                "found": False,
+                "has_synthesis_rules": False,
+                "is_deterministic": False,
+                "error": "justice.py / synthesis.py not found (searched recursively)",
+            }
+
+    try:
+        with open(justice_file, "r", encoding="utf-8") as f:
+            source_code = f.read()
+
+        tree = ast.parse(source_code)
+        analyzer = SynthesisRulesAnalyzer()
+        analyzer.visit(tree)
+
+        results = analyzer.get_results()
+
+        # String-level checks for known synthesis patterns
+        source_lower = source_code.lower()
+
+        rule_keywords = {
+            "security_override": [
+                "security", "cap", "override", "safe_tool",
+            ],
+            "variance_handling": [
+                "variance", "spread", "disagreement", "dissent",
+            ],
+            "weighted_average": [
+                "weight", "weighted", "0.4", "0.3",
+            ],
+            "fact_supremacy": [
+                "evidence", "fact", "confidence", "supremacy",
+            ],
+        }
+
+        rules_detected = {}
+        for rule_name, keywords in rule_keywords.items():
+            hits = [kw for kw in keywords if kw in source_lower]
+            rules_detected[rule_name] = {
+                "detected": len(hits) >= 1,
+                "keywords_matched": hits,
+            }
+
+        active_rules = sum(1 for r in rules_detected.values() if r["detected"])
+
+        # Check if file uses LLM (non-deterministic = bad for synthesis)
+        uses_llm = any(
+            pattern in source_code
+            for pattern in ["get_llm(", "ChatOpenAI(", "ChatDeepSeek(", ".invoke("]
+        )
+
+        results["rules_detected"] = rules_detected
+        results["active_rule_count"] = active_rules
+        results["has_synthesis_rules"] = active_rules >= 2
+        results["uses_llm"] = uses_llm
+        results["is_deterministic"] = not uses_llm and active_rules >= 1
+
+        return results
+
+    except Exception as e:
+        return {
+            "found": True,
+            "has_synthesis_rules": False,
+            "is_deterministic": False,
+            "error": str(e),
+        }
+
+
+# ══════════════════════════════════════════════
 # AST Analyzer Classes
+# ══════════════════════════════════════════════
 
 
 class StateGraphAnalyzer(ast.NodeVisitor):
@@ -277,7 +480,6 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         self.edge_patterns = []
 
     def visit_ImportFrom(self, node):
-        """Check for StateGraph import."""
         if node.module == "langgraph.graph" or node.module == "langgraph":
             for alias in node.names:
                 if alias.name == "StateGraph":
@@ -285,11 +487,9 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node):
-        """Check for graph builder patterns."""
         if isinstance(node.func, ast.Attribute):
             if node.func.attr == "add_edge":
                 self.has_parallel_edges = True
-                # Try to extract edge information
                 if len(node.args) >= 2:
                     self.edge_patterns.append({
                         "from": self._extract_name(node.args[0]),
@@ -300,7 +500,6 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Assign(self, node):
-        """Extract node names."""
         if isinstance(node.value, ast.Call):
             if isinstance(node.value.func, ast.Attribute):
                 if node.value.func.attr == "add_node":
@@ -311,7 +510,6 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _extract_name(self, node) -> Optional[str]:
-        """Extract string name from AST node."""
         if isinstance(node, ast.Str):
             return node.s
         elif isinstance(node, ast.Constant):
@@ -321,7 +519,6 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         return None
 
     def get_results(self) -> Dict:
-        """Get analysis results."""
         return {
             "found": True,
             "has_stategraph": self.has_stategraph,
@@ -344,7 +541,6 @@ class PydanticAnalyzer(ast.NodeVisitor):
         self.has_judicial_opinion = False
 
     def visit_ImportFrom(self, node):
-        """Check for Pydantic and TypedDict imports."""
         if node.module == "pydantic":
             self.has_pydantic = True
         elif node.module == "typing" or node.module == "typing_extensions":
@@ -354,29 +550,24 @@ class PydanticAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_ClassDef(self, node):
-        """Check for Evidence and JudicialOpinion classes."""
         if "Evidence" in node.name:
             self.has_evidence = True
         if "JudicialOpinion" in node.name or "Opinion" in node.name:
             self.has_judicial_opinion = True
-        
-        # Check for BaseModel inheritance
+
         for base in node.bases:
             if isinstance(base, ast.Name) and base.id == "BaseModel":
                 self.has_pydantic = True
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node):
-        """Check for Annotated reducers."""
         if isinstance(node.annotation, ast.Subscript):
             if isinstance(node.annotation.value, ast.Name):
                 if node.annotation.value.id == "Annotated":
-                    # Check for operator imports
                     self.has_reducers = True
         self.generic_visit(node)
 
     def get_results(self) -> Dict:
-        """Get analysis results."""
         return {
             "found": True,
             "has_pydantic": self.has_pydantic,
@@ -397,7 +588,6 @@ class ParallelEdgeAnalyzer(ast.NodeVisitor):
         self.has_fan_in = False
 
     def visit_Call(self, node):
-        """Check for add_edge calls."""
         if isinstance(node.func, ast.Attribute):
             if node.func.attr == "add_edge":
                 if len(node.args) >= 2:
@@ -407,42 +597,37 @@ class ParallelEdgeAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _extract_name(self, node) -> Optional[str]:
-        """Extract string name from AST node."""
         if isinstance(node, ast.Str):
             return node.s
         elif isinstance(node, ast.Constant):
             return str(node.value) if isinstance(node.value, str) else None
         elif isinstance(node, ast.Name):
             return node.id
-        elif isinstance(node, ast.List):  # List-style join edges
+        elif isinstance(node, ast.List):
             return f"[{len(node.elts)} nodes]"
         return None
 
     def get_results(self) -> Dict:
-        """Get analysis results."""
-        # Check for fan-out (multiple edges from same source)
         from_nodes = {}
         for from_node, to_node in self.edge_calls:
             if from_node not in from_nodes:
                 from_nodes[from_node] = []
             from_nodes[from_node].append(to_node)
-        
-        # Fan-out: same source -> multiple destinations
+
         for from_node, to_nodes in from_nodes.items():
             if len(to_nodes) > 1:
                 self.has_fan_out = True
-        
-        # Fan-in: multiple sources -> same destination
-        to_nodes = {}
+
+        to_nodes_map = {}
         for from_node, to_node in self.edge_calls:
-            if to_node not in to_nodes:
-                to_nodes[to_node] = []
-            to_nodes[to_node].append(from_node)
-        
-        for to_node, from_nodes_list in to_nodes.items():
+            if to_node not in to_nodes_map:
+                to_nodes_map[to_node] = []
+            to_nodes_map[to_node].append(from_node)
+
+        for to_node, from_nodes_list in to_nodes_map.items():
             if len(from_nodes_list) > 1:
                 self.has_fan_in = True
-        
+
         return {
             "found": True,
             "has_parallel_edges": len(self.edge_calls) > 0,
@@ -459,13 +644,11 @@ class SandboxingAnalyzer(ast.NodeVisitor):
         self.has_tempfile = False
 
     def visit_ImportFrom(self, node):
-        """Check for tempfile import."""
         if node.module == "tempfile":
             self.has_tempfile = True
         self.generic_visit(node)
 
     def visit_Call(self, node):
-        """Check for TemporaryDirectory calls."""
         if isinstance(node.func, ast.Name):
             if node.func.id == "TemporaryDirectory":
                 self.has_tempfile = True
@@ -482,7 +665,6 @@ class StructuredOutputAnalyzer(ast.NodeVisitor):
         self.has_structured_output = False
 
     def visit_Call(self, node):
-        """Check for with_structured_output calls."""
         if isinstance(node.func, ast.Attribute):
             if node.func.attr == "with_structured_output":
                 self.has_structured_output = True
@@ -490,3 +672,164 @@ class StructuredOutputAnalyzer(ast.NodeVisitor):
                 self.has_structured_output = True
         self.generic_visit(node)
 
+
+# ──────────────────────────────────────────────
+# NEW: Judge prompt diversity analyzer
+# ──────────────────────────────────────────────
+
+class JudgePromptAnalyzer(ast.NodeVisitor):
+    """AST visitor to check for diverse judge prompts/personas.
+
+    Looks for:
+    - Multiple distinct judge function definitions
+    - A factory pattern with persona parameter
+    - Distinct string literals (system prompts) per judge
+    """
+
+    def __init__(self):
+        self.judge_functions: list[str] = []
+        self.has_factory_pattern = False
+        self.string_constants: list[str] = []
+        self.persona_params: list[str] = []
+
+    def visit_FunctionDef(self, node):
+        name_lower = node.name.lower()
+        # Detect judge-related function names
+        judge_keywords = [
+            "prosecutor", "defense", "defence", "tech_lead",
+            "techlead", "judge", "judicial",
+        ]
+        if any(kw in name_lower for kw in judge_keywords):
+            self.judge_functions.append(node.name)
+
+        # Check for factory pattern: function with a "persona"/"judge_type"/"role" param
+        for arg in node.args.args:
+            arg_name = arg.arg.lower()
+            if arg_name in ("persona", "judge_type", "role", "judge_name", "judge_role"):
+                self.has_factory_pattern = True
+                self.persona_params.append(arg.arg)
+
+        self.generic_visit(node)
+
+    def visit_Constant(self, node):
+        """Collect string constants (potential prompt templates)."""
+        if isinstance(node.value, str) and len(node.value) > 50:
+            self.string_constants.append(node.value[:200])
+        self.generic_visit(node)
+
+    def visit_Dict(self, node):
+        """Check for persona config dicts like JUDGE_PERSONAS = {...}."""
+        # If a dict has 3+ keys that look like judge names, it's a persona config
+        key_names = []
+        for key in node.keys:
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                key_names.append(key.value.lower())
+
+        judge_key_hits = sum(
+            1 for k in key_names
+            if any(j in k for j in ["prosecutor", "defense", "defence", "tech", "lead"])
+        )
+        if judge_key_hits >= 2:
+            self.has_factory_pattern = True
+
+        self.generic_visit(node)
+
+    def get_results(self) -> Dict:
+        # Distinct prompts = long string constants that differ from each other
+        unique_prompts = len(set(s[:100] for s in self.string_constants))
+
+        has_diverse = (
+            self.has_factory_pattern
+            or len(self.judge_functions) >= 2
+            or unique_prompts >= 2
+        )
+
+        return {
+            "found": True,
+            "judge_functions": self.judge_functions,
+            "has_factory_pattern": self.has_factory_pattern,
+            "persona_params": self.persona_params,
+            "distinct_prompt_count": unique_prompts,
+            "has_diverse_prompts": has_diverse,
+        }
+
+
+# ──────────────────────────────────────────────
+# NEW: Synthesis rules analyzer
+# ──────────────────────────────────────────────
+
+class SynthesisRulesAnalyzer(ast.NodeVisitor):
+    """AST visitor to check for deterministic synthesis logic.
+
+    Looks for:
+    - Conditional chains (if/elif) for score resolution
+    - Arithmetic operations (weighted averages)
+    - min/max/round calls (score clamping)
+    - Absence of LLM invocations
+    """
+
+    def __init__(self):
+        self.conditional_depth = 0
+        self.max_conditional_depth = 0
+        self.has_min_max = False
+        self.has_round = False
+        self.has_weighted_calc = False
+        self.synthesis_functions: list[str] = []
+        self.has_llm_call = False
+
+    def visit_FunctionDef(self, node):
+        name_lower = node.name.lower()
+        synthesis_keywords = [
+            "synthesize", "synthesis", "resolve", "final_score",
+            "chief_justice", "verdict", "aggregate_score",
+        ]
+        if any(kw in name_lower for kw in synthesis_keywords):
+            self.synthesis_functions.append(node.name)
+        self.generic_visit(node)
+
+    def visit_If(self, node):
+        self.conditional_depth += 1
+        self.max_conditional_depth = max(
+            self.max_conditional_depth, self.conditional_depth
+        )
+        self.generic_visit(node)
+        self.conditional_depth -= 1
+
+    def visit_Call(self, node):
+        # Check for min/max/round
+        if isinstance(node.func, ast.Name):
+            if node.func.id in ("min", "max"):
+                self.has_min_max = True
+            elif node.func.id == "round":
+                self.has_round = True
+            elif node.func.id == "get_llm":
+                self.has_llm_call = True
+
+        # Check for .invoke() — indicates LLM usage
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr == "invoke":
+                self.has_llm_call = True
+
+        self.generic_visit(node)
+
+    def visit_BinOp(self, node):
+        """Check for multiplication (weighted calculations)."""
+        if isinstance(node.op, ast.Mult):
+            # Check if one operand is a float constant (weight)
+            for operand in [node.left, node.right]:
+                if isinstance(operand, ast.Constant) and isinstance(operand.value, float):
+                    if 0 < operand.value < 1:
+                        self.has_weighted_calc = True
+        self.generic_visit(node)
+
+    def get_results(self) -> Dict:
+        return {
+            "found": True,
+            "synthesis_functions": self.synthesis_functions,
+            "has_conditional_logic": self.max_conditional_depth >= 2,
+            "max_conditional_depth": self.max_conditional_depth,
+            "has_min_max": self.has_min_max,
+            "has_round": self.has_round,
+            "has_weighted_calc": self.has_weighted_calc,
+            "has_llm_call": self.has_llm_call,
+        }
