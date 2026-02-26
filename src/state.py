@@ -104,15 +104,21 @@ class Evidence(BaseModel):
                 "High confidence (>0.7) requires detailed rationale (at least 50 characters). "
                 f"Current rationale length: {len(self.rationale)}"
             )
-        if self.found and self.confidence < 0.3:
+        # Found evidence should have higher confidence (>= 0.5)
+        # This removes ambiguity in the [0.3, 0.5] overlap zone
+        if self.found and self.confidence < 0.5:
             raise EvidenceValidationError(
                 "confidence",
-                f"Evidence marked as 'found' should have confidence >= 0.3. Got: {self.confidence}"
+                f"Evidence marked as 'found' should have confidence >= 0.5 (medium-high). "
+                f"Got: {self.confidence}. If uncertain, mark as found=False."
             )
-        if not self.found and self.confidence > 0.5:
+        # Not found evidence should have lower confidence (<= 0.4)
+        # This creates a clear separation: found >= 0.5, not found <= 0.4
+        if not self.found and self.confidence > 0.4:
             raise EvidenceValidationError(
                 "confidence",
-                f"Evidence marked as 'not found' should have confidence <= 0.5. Got: {self.confidence}"
+                f"Evidence marked as 'not found' should have confidence <= 0.4 (low-medium). "
+                f"Got: {self.confidence}. If confident it exists, mark as found=True."
             )
         # Validate content is present when found=True
         if self.found and not self.content and self.confidence > 0.6:
