@@ -11,10 +11,12 @@ Two graphs are available:
 Architecture spec reference: Section 5 — Graph Wiring
 """
 import logging
+
 logging.basicConfig(level=logging.INFO)
 import json
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from langgraph.graph import END, START, StateGraph
 
@@ -242,6 +244,7 @@ def run_interim_audit(
         "evidences": {},
         "opinions": [],
         "final_report": "",
+        "repo_root": "",
     }
 
     try:
@@ -293,6 +296,7 @@ def run_audit(
         "evidences": {},
         "opinions": [],
         "final_report": "",
+        "repo_root": "",
     }
 
     try:
@@ -303,6 +307,30 @@ def run_audit(
             "full_graph",
             f"Failed to execute audit: {e}",
         ) from e
+
+    # Derive a per-owner/per-repo output path when using the default.
+    #
+    # This ensures:
+    # - Different repositories never overwrite each other's reports.
+    # - The same repository can be re-audited and its report updated in-place.
+    default_base = Path("audit/report_generated/audit_report.md")
+    if output_path == default_base:
+        owner, name = _parse_repo_owner_and_name(repo_url)
+        if owner and name:
+            output_path = (
+                Path("audit") / "report_generated" / owner / name / "audit_report.md"
+            )
+        else:
+            # Fallback: safe slug from the URL itself.
+            safe_slug = (
+                repo_url.replace("://", "_")
+                .replace("/", "_")
+                .replace(":", "_")
+                .replace("\\", "_")
+            )
+            output_path = (
+                Path("audit") / "report_generated" / safe_slug / "audit_report.md"
+            )
 
     # Save report
     report = final_state.get("final_report", "")
@@ -317,6 +345,46 @@ def run_audit(
 # ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
+
+def _parse_repo_owner_and_name(repo_url: str):
+    """Parse a GitHub-style repo URL into (owner, repo_name).
+
+    Supports:
+    - https://github.com/owner/repo
+    - https://github.com/owner/repo.git
+    - git@github.com:owner/repo.git
+
+    Returns:
+        (owner, repo) or (None, None) if parsing fails.
+    """
+    url = repo_url.strip()
+
+    # SSH form: git@github.com:owner/repo.git
+    if url.startswith("git@"):
+        try:
+            _, rest = url.split(":", 1)
+            rest = rest.rstrip("/")
+            if rest.endswith(".git"):
+                rest = rest[:-4]
+            parts = rest.split("/")
+            if len(parts) >= 2:
+                return parts[-2], parts[-1]
+        except ValueError:
+            return None, None
+        return None, None
+
+    # HTTPS form: https://github.com/owner/repo(.git)
+    if url.startswith("http"):
+        parsed = urlparse(url)
+        path = parsed.path.strip("/")
+        if path.endswith(".git"):
+            path = path[:-4]
+        parts = path.split("/")
+        if len(parts) >= 2:
+            return parts[-2], parts[-1]
+
+    return None, None
+
 
 def _save_evidence_json(state: dict, output_path: Path) -> None:
     """Save collected evidence to a JSON file for inspection."""

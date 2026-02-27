@@ -296,11 +296,11 @@ class AuditReport(BaseModel):
 
 class AgentState(TypedDict):
     """Shared state for the LangGraph pipeline.
-
+    
     Reducers prevent parallel agents from overwriting each other:
     - operator.ior merges evidence dicts from 3 detectives
     - operator.add concatenates opinion lists from 3 judges
-
+    
     Every field is required. Initialize with defaults at invoke time:
         graph.invoke({
             "repo_url": url,
@@ -313,25 +313,30 @@ class AgentState(TypedDict):
             "evidences": {},
             "opinions": [],
             "final_report": "",
+            "repo_root": "",
         })
     """
-
+    
     # ── Input (set at invoke) ──
     repo_url: str
     pdf_path: str
     rubric_path: str
-
+    
     # ── Metadata (set during execution) ──
     git_commit_hash: str
     model_metadata: dict
-
+    # Absolute path to the cloned repository root (set by repo_investigator).
+    # This allows other nodes (e.g., doc_analyst) to locate artifacts such as
+    # reports/interim_report.* inside the sandboxed clone.
+    repo_root: str
+    
     # ── Configuration (set by context_builder) ──
     rubric_dimensions: list[dict]
     synthesis_rules: dict
-
+    
     # ── Parallel execution (reducers required) ──
     evidences: Annotated[dict[str, list[Evidence]], operator.ior]
     opinions: Annotated[list[JudicialOpinion], operator.add]
-
+    
     # ── Output (set by chief_justice as Markdown string) ──
     final_report: str

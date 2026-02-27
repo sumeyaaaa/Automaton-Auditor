@@ -122,6 +122,3 @@ The system successfully audits a repository when it:
 - Custom rubric creation interface
 - Historical trend analysis across audits
 
-
-
-

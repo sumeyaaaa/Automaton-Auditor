@@ -132,11 +132,13 @@ def check_parallel_edges(repo_path: Path) -> Dict:
 def check_sandboxing(repo_path: Path) -> Dict:
     """Check for proper sandboxing in tool implementations.
 
+    Returns file-level detail with code snippets so judges can verify.
+
     Args:
         repo_path: Path to the cloned repository
 
     Returns:
-        Dictionary with sandboxing analysis
+        Dictionary with sandboxing analysis including file details and snippets
     """
     tools_dir = repo_path / "src" / "tools"
     if not tools_dir.exists():
@@ -149,11 +151,16 @@ def check_sandboxing(repo_path: Path) -> Dict:
     has_sandboxing = False
     has_os_system = False
     uses_subprocess = False
+    file_details = []
 
     for tool_file in tools_dir.glob("*.py"):
         try:
             with open(tool_file, "r", encoding="utf-8") as f:
                 content = f.read()
+                lines = content.splitlines()
+
+            rel_path = str(tool_file.relative_to(repo_path))
+            file_info = {"file": rel_path, "patterns": []}
 
             try:
                 tree = ast.parse(content)
@@ -161,13 +168,41 @@ def check_sandboxing(repo_path: Path) -> Dict:
                 tempfile_checker.visit(tree)
                 if tempfile_checker.has_tempfile:
                     has_sandboxing = True
+                    file_info["patterns"].append("tempfile.TemporaryDirectory")
+
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    lineno = getattr(node, "lineno", 0)
+                    # os.system detection
+                    if (isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "system"
+                            and isinstance(node.func.value, ast.Name)
+                            and node.func.value.id == "os"):
+                        has_os_system = True
+                        snippet = lines[lineno - 1].strip() if lineno <= len(lines) else ""
+                        file_info["patterns"].append(f"os.system() at line {lineno}: {snippet[:80]}")
+                    # subprocess detection
+                    if (isinstance(node.func, ast.Attribute)
+                            and node.func.attr in ("run", "Popen")
+                            and isinstance(node.func.value, ast.Name)
+                            and node.func.value.id == "subprocess"):
+                        uses_subprocess = True
+                        snippet = lines[lineno - 1].strip() if lineno <= len(lines) else ""
+                        file_info["patterns"].append(f"subprocess.{node.func.attr}() at line {lineno}: {snippet[:80]}")
+
+                # Check for validate_* and sanitize_* functions (security utilities)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and (
+                        node.name.startswith("validate_") or node.name.startswith("sanitize_")
+                    ):
+                        file_info["patterns"].append(f"security function: {node.name}() at line {node.lineno}")
+
             except Exception:
                 pass
 
-            if "os.system" in content:
-                has_os_system = True
-            if "subprocess.run" in content or "subprocess.Popen" in content:
-                uses_subprocess = True
+            if file_info["patterns"]:
+                file_details.append(file_info)
         except Exception:
             continue
 
@@ -177,6 +212,8 @@ def check_sandboxing(repo_path: Path) -> Dict:
         "has_os_system": has_os_system,
         "uses_subprocess": uses_subprocess,
         "security_score": "safe" if has_sandboxing and not has_os_system else "unsafe",
+        "files_analyzed": len(list(tools_dir.glob("*.py"))),
+        "file_details": file_details,
     }
 
 
@@ -231,7 +268,10 @@ def check_structured_output(repo_path: Path) -> Dict:
 
 
 def check_security(repo_path: Path) -> Dict:
-    """Comprehensive security check for forbidden patterns.
+    """Comprehensive security check for forbidden patterns using AST.
+
+    Uses AST analysis to detect actual os.system(), eval(), exec() CALLS,
+    not just string mentions in comments or docstrings.
 
     Args:
         repo_path: Path to the cloned repository
@@ -251,21 +291,38 @@ def check_security(repo_path: Path) -> Dict:
     for py_file in src_dir.rglob("*.py"):
         try:
             with open(py_file, "r", encoding="utf-8") as f:
-                content = f.read()
+                source_code = f.read()
 
-            if "os.system" in content:
-                security_issues.append({
-                    "file": str(py_file.relative_to(repo_path)),
-                    "issue": "os.system() detected - security violation",
-                    "severity": "high",
-                })
+            tree = ast.parse(source_code)
+            rel_path = str(py_file.relative_to(repo_path))
 
-            if "eval(" in content or "exec(" in content:
-                security_issues.append({
-                    "file": str(py_file.relative_to(repo_path)),
-                    "issue": "eval() or exec() detected - security violation",
-                    "severity": "high",
-                })
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+
+                # Detect os.system(...) calls
+                if (isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "system"
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "os"):
+                    security_issues.append({
+                        "file": rel_path,
+                        "line": getattr(node, "lineno", "?"),
+                        "issue": "os.system() call detected - use subprocess.run() instead",
+                        "severity": "high",
+                    })
+
+                # Detect eval(...) and exec(...) calls
+                if isinstance(node.func, ast.Name) and node.func.id in ("eval", "exec"):
+                    security_issues.append({
+                        "file": rel_path,
+                        "line": getattr(node, "lineno", "?"),
+                        "issue": f"{node.func.id}() call detected - code injection risk",
+                        "severity": "high",
+                    })
+
+        except SyntaxError:
+            continue
         except Exception:
             continue
 
@@ -273,6 +330,7 @@ def check_security(repo_path: Path) -> Dict:
         "found": True,
         "security_issues": security_issues,
         "is_secure": len(security_issues) == 0,
+        "security_score": "safe" if len(security_issues) == 0 else "unsafe",
     }
 
 
@@ -525,13 +583,44 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         return None
 
     def get_results(self) -> Dict:
+        # Deduplicate nodes (same node may be registered in multiple code paths)
+        unique_nodes = list(dict.fromkeys(self.node_names))  # preserves order
+
+        # Detect fan-out/fan-in from edge patterns
+        # Fan-out: one source → multiple targets, or list source
+        # Fan-in: multiple sources → one target, or list in source position
+        has_fan_out = False
+        has_fan_in = False
+        source_counts = {}
+        target_counts = {}
+
+        for edge in self.edge_patterns:
+            src = edge.get("from", "")
+            tgt = edge.get("to", "")
+            # List in source/target position indicates fan-in/fan-out
+            if src.startswith("["):
+                has_fan_in = True
+            if tgt.startswith("["):
+                has_fan_out = True
+            source_counts[src] = source_counts.get(src, 0) + 1
+            target_counts[tgt] = target_counts.get(tgt, 0) + 1
+
+        # One source going to multiple targets = fan-out
+        if any(count > 1 for count in source_counts.values()):
+            has_fan_out = True
+        # Multiple sources going to one target = fan-in
+        if any(count > 1 for count in target_counts.values()):
+            has_fan_in = True
+
         return {
             "found": True,
             "has_stategraph": self.has_stategraph,
             "has_parallel_edges": self.has_parallel_edges,
             "has_conditional_edges": self.has_conditional_edges,
-            "node_count": len(self.node_names),
-            "nodes": self.node_names,
+            "has_fan_out": has_fan_out,
+            "has_fan_in": has_fan_in,
+            "node_count": len(unique_nodes),
+            "nodes": unique_nodes,
             "edge_count": len(self.edge_patterns),
         }
 
@@ -545,14 +634,25 @@ class PydanticAnalyzer(ast.NodeVisitor):
         self.has_reducers = False
         self.has_evidence = False
         self.has_judicial_opinion = False
+        self.model_names = []
+        self.reducer_fields = []
+        self.imports = []
 
     def visit_ImportFrom(self, node):
-        if node.module == "pydantic":
+        if node.module and "pydantic" in node.module:
             self.has_pydantic = True
-        elif node.module == "typing" or node.module == "typing_extensions":
+            for alias in node.names:
+                self.imports.append(f"from {node.module} import {alias.name}")
+        elif node.module in ("typing", "typing_extensions"):
             for alias in node.names:
                 if alias.name == "TypedDict":
                     self.has_typeddict = True
+                    self.imports.append(f"from {node.module} import TypedDict")
+                if alias.name == "Annotated":
+                    self.imports.append(f"from {node.module} import Annotated")
+        elif node.module == "operator":
+            for alias in node.names:
+                self.imports.append(f"from operator import {alias.name}")
         self.generic_visit(node)
 
     def visit_ClassDef(self, node):
@@ -564,6 +664,10 @@ class PydanticAnalyzer(ast.NodeVisitor):
         for base in node.bases:
             if isinstance(base, ast.Name) and base.id == "BaseModel":
                 self.has_pydantic = True
+                self.model_names.append(f"{node.name}(BaseModel) at line {node.lineno}")
+            elif isinstance(base, ast.Name) and base.id == "TypedDict":
+                self.has_typeddict = True
+                self.model_names.append(f"{node.name}(TypedDict) at line {node.lineno}")
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node):
@@ -571,6 +675,13 @@ class PydanticAnalyzer(ast.NodeVisitor):
             if isinstance(node.annotation.value, ast.Name):
                 if node.annotation.value.id == "Annotated":
                     self.has_reducers = True
+                    # Try to extract field name
+                    field_name = "?"
+                    if isinstance(node.target, ast.Name):
+                        field_name = node.target.id
+                    self.reducer_fields.append(
+                        f"Annotated[...] field '{field_name}' at line {node.lineno}"
+                    )
         self.generic_visit(node)
 
     def get_results(self) -> Dict:
@@ -582,6 +693,9 @@ class PydanticAnalyzer(ast.NodeVisitor):
             "has_evidence": self.has_evidence,
             "has_judicial_opinion": self.has_judicial_opinion,
             "is_properly_typed": self.has_pydantic or self.has_typeddict,
+            "model_names": self.model_names,
+            "reducer_fields": self.reducer_fields[:10],  # Cap to avoid content overflow
+            "imports": self.imports[:10],
         }
 
 

@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.exceptions import PDFNotFoundError, PDFParseError
-from src.tools.security_utils import validate_pdf_path, sanitize_path
 
 logger = logging.getLogger(__name__)
 
@@ -85,22 +84,6 @@ def ingest_pdf(pdf_path: Path) -> Dict:
         PDFNotFoundError: If the PDF file doesn't exist
         PDFParseError: If no parser can handle the file
     """
-    # Security: Validate PDF path before processing
-    if not validate_pdf_path(pdf_path):
-        raise PDFNotFoundError(
-            f"Invalid or unsafe PDF path: {pdf_path}. "
-            "Path must be a valid .pdf file under 100MB."
-        )
-    
-    # Sanitize path to prevent traversal
-    try:
-        sanitized_path = sanitize_path(pdf_path)
-        if not sanitized_path:
-            raise PDFNotFoundError(f"Path sanitization failed: {pdf_path}")
-        pdf_path = sanitized_path
-    except ValueError as e:
-        raise PDFNotFoundError(f"Path validation failed: {e}")
-    
     if not pdf_path.exists():
         raise PDFNotFoundError(str(pdf_path))
 
@@ -233,7 +216,13 @@ def _chunk_text(text: str, chunk_size: int = 1000) -> List[Dict]:
 
 
 def search_keywords(chunks: List[Dict], keywords: List[str]) -> Dict:
-    """Search for keywords in document chunks.
+    """Search for keywords in document chunks with fuzzy variant matching.
+
+    Instead of exact phrase matching, each rubric keyword maps to a set of
+    synonyms and alternate phrasings. This catches cases like:
+    - "fan-out/fan-in" matching "Fan-In/Fan-Out"
+    - "dialectical evaluation" matching "Dialectical Synthesis"
+    - "operator.ior" matching "State Synchronization"
 
     Args:
         chunks: List of document chunks
@@ -242,24 +231,89 @@ def search_keywords(chunks: List[Dict], keywords: List[str]) -> Dict:
     Returns:
         Dictionary with keyword matches and context
     """
+    # Map each rubric keyword to variant phrases that indicate the same concept
+    keyword_variants = {
+        "Dialectical Synthesis": [
+            "dialectical synthesis", "dialectical", "dialectic",
+            "thesis-antithesis", "adversarial", "prosecutor.*defense",
+            "multiple perspectives", "opposing perspectives",
+            "judicial evaluation", "courtroom pattern",
+            "digital courtroom", "dialectical reasoning",
+        ],
+        "Fan-In / Fan-Out": [
+            "fan-in", "fan-out", "fan in", "fan out",
+            "parallel fan", "fan-in/fan-out", "fan-out/fan-in",
+            "parallel execution", "parallel edge", "parallel write",
+            "concurrent", "superstep",
+        ],
+        "Fan-In/Fan-Out": [
+            "fan-in", "fan-out", "fan in", "fan out",
+            "fan-in/fan-out", "fan-out/fan-in",
+            "parallel fan", "parallel execution",
+        ],
+        "Metacognition": [
+            "metacognition", "metacognitive", "self-referential",
+            "auditing itself", "audit.*audit", "self-aware",
+            "introspection", "reflection on process",
+        ],
+        "State Synchronization": [
+            "state synchronization", "state sync",
+            "operator.ior", "operator.add", "reducer",
+            "annotated reducer", "parallel.*merge",
+            "parallel.*write", "state mutation",
+            "merge evidence", "concatenate opinion",
+        ],
+    }
+
     matches = {}
     for keyword in keywords:
         matches[keyword] = []
-        keyword_lower = keyword.lower()
+
+        # Get variants for this keyword, or fall back to exact match
+        variants = keyword_variants.get(keyword, [keyword.lower()])
 
         for chunk in chunks:
-            content_lower = chunk["content"].lower()
-            if keyword_lower in content_lower:
-                idx = content_lower.find(keyword_lower)
-                start = max(0, idx - 200)
-                end = min(len(chunk["content"]), idx + len(keyword) + 200)
-                context = chunk["content"][start:end]
+            content = chunk["content"] if isinstance(chunk, dict) else str(chunk)
+            content_lower = content.lower()
 
-                matches[keyword].append({
-                    "chunk_id": chunk["id"],
-                    "context": context,
-                    "has_substance": _check_substance(context, keyword),
-                })
+            for variant in variants:
+                # Support simple regex patterns (e.g. "prosecutor.*defense")
+                try:
+                    import re as _re
+                    if _re.search(variant, content_lower):
+                        idx = content_lower.find(variant.split(".*")[0])  # Find first part
+                        if idx == -1:
+                            idx = 0
+                        start = max(0, idx - 200)
+                        end = min(len(content), idx + len(variant) + 200)
+                        context = content[start:end]
+
+                        # Avoid duplicate matches for the same chunk
+                        already_matched = any(
+                            m["chunk_id"] == chunk.get("id", -1) for m in matches[keyword]
+                        )
+                        if not already_matched:
+                            matches[keyword].append({
+                                "chunk_id": chunk.get("id", 0),
+                                "matched_variant": variant,
+                                "context": context[:300],
+                                "has_substance": _check_substance(context, keyword),
+                            })
+                        break  # One match per chunk per keyword is enough
+                except Exception:
+                    # Fallback to simple substring
+                    if variant in content_lower:
+                        idx = content_lower.find(variant)
+                        start = max(0, idx - 200)
+                        end = min(len(content), idx + len(variant) + 200)
+                        context = content[start:end]
+                        matches[keyword].append({
+                            "chunk_id": chunk.get("id", 0),
+                            "matched_variant": variant,
+                            "context": context[:300],
+                            "has_substance": _check_substance(context, keyword),
+                        })
+                        break
 
     return {
         "keywords": keywords,
@@ -313,6 +367,52 @@ def _summarize_matches(matches: Dict) -> Dict:
     }
 
 
+def ingest_report(report_path: Path) -> Dict:
+    """Generic ingestion for a report that may be .pdf or .md.
+
+    For now:
+      - .pdf → use ingest_pdf()
+      - .md  → read text and chunk using the same _chunk_text()
+      - .doc/.docx → return an error (unsupported placeholder)
+    """
+    suffix = report_path.suffix.lower()
+
+    # Prefer PDF via the existing ingest_pdf pipeline
+    if suffix == ".pdf":
+        return ingest_pdf(report_path)
+
+    # Lightweight markdown ingestion
+    if suffix == ".md":
+        if not report_path.exists():
+            return {
+                "success": False,
+                "error": f"Markdown report not found: {report_path}",
+            }
+        text = report_path.read_text(encoding="utf-8", errors="ignore")
+        chunks = _chunk_text(text)
+        return {
+            "success": True,
+            "chunks": chunks,
+            "total_chunks": len(chunks),
+            "method": "markdown",
+        }
+
+    # Placeholder for future DOC/DOCX support
+    if suffix in (".doc", ".docx"):
+        return {
+            "success": False,
+            "error": (
+                f"Unsupported report format '{suffix}'. "
+                "Install a DOC parser and extend ingest_report() to handle it."
+            ),
+        }
+
+    return {
+        "success": False,
+        "error": f"Unsupported report format '{suffix}'.",
+    }
+
+
 def extract_file_path_claims(chunks: List[Dict]) -> List[str]:
     """Extract file paths mentioned in the document.
 
@@ -334,7 +434,7 @@ def extract_file_path_claims(chunks: List[Dict]) -> List[str]:
 
 
 def extract_images_from_pdf(pdf_path: Path) -> List[Dict]:
-    """Extract images from PDF document.
+    """Extract images from a PDF document.
 
     Tries pymupdf first (better image extraction), falls back to pypdf.
 
@@ -344,21 +444,6 @@ def extract_images_from_pdf(pdf_path: Path) -> List[Dict]:
     Returns:
         List of extracted images with metadata
     """
-    # Security: Validate PDF path before processing
-    if not validate_pdf_path(pdf_path):
-        logger.warning(f"Invalid or unsafe PDF path: {pdf_path}")
-        return []
-    
-    # Sanitize path to prevent traversal
-    try:
-        sanitized_path = sanitize_path(pdf_path)
-        if not sanitized_path:
-            return []
-        pdf_path = sanitized_path
-    except ValueError:
-        logger.warning(f"Path sanitization failed: {pdf_path}")
-        return []
-    
     if not pdf_path.exists():
         return []
 
@@ -414,4 +499,104 @@ def extract_images_from_pdf(pdf_path: Path) -> List[Dict]:
             logger.warning("pypdf image extraction failed: %s", e)
             return []
 
+    return []
+
+
+def extract_diagrams_from_report(report_path: Path) -> List[Dict]:
+    """Extract diagram-like artifacts from a report.
+
+    For now:
+      - If report is a PDF  → use extract_images_from_pdf()
+      - If report is a .md → treat mermaid code blocks as diagrams
+      - Otherwise          → return empty list
+    """
+    suffix = report_path.suffix.lower()
+
+    # 1) Real images from a PDF
+    if suffix == ".pdf":
+        return extract_images_from_pdf(report_path)
+
+    # 2) Mermaid diagrams inside markdown
+    if suffix == ".md":
+        if not report_path.exists():
+            return []
+
+        text = report_path.read_text(encoding="utf-8", errors="ignore")
+        diagrams: List[Dict] = []
+
+        # 2a) Match fenced code blocks that look like mermaid diagrams.
+        # Supports:
+        # ```mermaid
+        # graph TD
+        #   ...
+        # ```
+        mermaid_pattern = re.compile(
+            r"```(?:mermaid)?\s+([\s\S]*?)```",
+            flags=re.IGNORECASE,
+        )
+
+        for idx, match in enumerate(mermaid_pattern.finditer(text), start=1):
+            block = match.group(1).strip()
+            block_lower = block.lower()
+            if block_lower.startswith("graph") or "graph td" in block_lower:
+                diagrams.append(
+                    {
+                        "index": idx,
+                        "format": "mermaid",
+                        "language": "mermaid",
+                        "snippet": block[:400],
+                    }
+                )
+
+        # 2b) Fallback: detect bare mermaid blocks without fences,
+        # e.g. lines starting with "graph TD" as in many markdown docs.
+        if not diagrams:
+            lines = text.splitlines()
+            current_block: List[str] = []
+            capturing = False
+            idx = 0
+
+            for line in lines:
+                stripped = line.strip()
+                lower = stripped.lower()
+
+                if not capturing:
+                    if lower.startswith("graph ") or "graph td" in lower:
+                        # Start a new diagram block
+                        capturing = True
+                        current_block = [line]
+                        idx += 1
+                else:
+                    if not stripped:
+                        # Blank line → end of diagram block
+                        block = "\n".join(current_block).strip()
+                        if block:
+                            diagrams.append(
+                                {
+                                    "index": idx,
+                                    "format": "mermaid",
+                                    "language": "mermaid",
+                                    "snippet": block[:400],
+                                }
+                            )
+                        capturing = False
+                        current_block = []
+                    else:
+                        current_block.append(line)
+
+            # Flush last block if file ended without blank line
+            if capturing and current_block:
+                block = "\n".join(current_block).strip()
+                diagrams.append(
+                    {
+                        "index": idx or 1,
+                        "format": "mermaid",
+                        "language": "mermaid",
+                        "snippet": block[:400],
+                    }
+                )
+
+        return diagrams
+
+    # 3) Unsupported formats (doc/docx etc.) — no diagrams extracted yet
     return []

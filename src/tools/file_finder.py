@@ -123,3 +123,29 @@ def get_repo_structure_sample(repo_path: Path, max_files: int = 20) -> List[str]
     return files
 
 
+def find_interim_report_file(repo_path: Path) -> Optional[Path]:
+    """Locate an interim report file inside a cloned repository.
+
+    Looks under ``reports/`` for one of:
+      - interim_report.md
+      - interim_report.pdf
+      - interim_report.doc
+      - interim_report.docx
+
+    Returns:
+        Path to the first matching file, or None if not found.
+    """
+    candidates = [
+        repo_path / "reports" / "interim_report.md",
+        repo_path / "reports" / "interim_report.pdf",
+        repo_path / "reports" / "interim_report.doc",
+        repo_path / "reports" / "interim_report.docx",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return None
+
+

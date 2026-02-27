@@ -32,6 +32,3 @@ class TestExtractGitHistory:
         result = extract_git_history(Path("/nonexistent/path"))
         assert "error" in result or result.get("total_commits", 0) == 0
 
-
-
-

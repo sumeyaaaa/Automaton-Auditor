@@ -25,13 +25,47 @@ from src.state import AgentState, Evidence
 from src.tools.file_finder import find_file_recursive, find_file_fuzzy, get_repo_structure_sample
 from src.tools.git_tools import extract_git_history, safe_clone
 from src.tools.pdf_tools import (
+    extract_diagrams_from_report,
     extract_file_path_claims,
-    extract_images_from_pdf,
     ingest_pdf,
+    ingest_report,
     search_keywords,
 )
 from src.tools.code_quality_tools import check_general_code_quality
 from src.tools.repo_health_tools import check_general_repo_health
+
+
+# ── Helper: Truncate evidence content to fit Evidence.content max_length ──
+MAX_EVIDENCE_CONTENT = 9500  # Leave headroom for the 10000 char limit
+
+def _safe_content(data, max_len: int = MAX_EVIDENCE_CONTENT) -> str:
+    """Serialize data to JSON string, truncating if needed to fit Evidence.content."""
+    if isinstance(data, str):
+        text = data
+    else:
+        try:
+            text = json.dumps(data)
+        except (TypeError, ValueError):
+            text = str(data)
+
+    if len(text) <= max_len:
+        return text
+
+    # Truncate intelligently: keep the structure, trim large arrays
+    if isinstance(data, dict):
+        # Try removing large keys first (like "commits" list)
+        trimmed = dict(data)
+        for key in ("commits", "commit_list", "raw_output", "details"):
+            if key in trimmed and isinstance(trimmed[key], list):
+                original_len = len(trimmed[key])
+                trimmed[key] = trimmed[key][:5]  # Keep only first 5
+                trimmed[f"{key}_truncated"] = f"Showing 5 of {original_len}"
+                result = json.dumps(trimmed)
+                if len(result) <= max_len:
+                    return result
+
+    # Final fallback: hard truncate
+    return text[:max_len - 50] + f"... [TRUNCATED, original {len(text)} chars]"
 
 
 # ──────────────────────────────────────────────
@@ -141,34 +175,12 @@ Respond with a JSON object:
                     if semantic_analysis:
                         rationale += f" Semantic analysis: {semantic_analysis.get('rationale', 'N/A')[:100]}"
                     
-                    # Truncate commit data if too long (Evidence.content has max_length=10000)
-                    git_result_for_content = git_result.copy()
-                    commits_list = git_result_for_content.get("commits", [])
-                    if commits_list:
-                        # Keep only essential commit info and limit to recent commits
-                        # Full commit messages can be very long, so we truncate them
-                        max_commits_in_content = 20  # Keep last 20 commits for content
-                        truncated_commits = commits_list[-max_commits_in_content:] if len(commits_list) > max_commits_in_content else commits_list
-                        
-                        # Truncate long commit messages
-                        for commit in truncated_commits:
-                            if "message" in commit and len(commit["message"]) > 200:
-                                commit["message"] = commit["message"][:200] + "..."
-                        
-                        git_result_for_content["commits"] = truncated_commits
-                        git_result_for_content["commits_truncated"] = len(commits_list) - len(truncated_commits) if len(commits_list) > max_commits_in_content else 0
-                    
-                    content_json = json.dumps(git_result_for_content)
-                    # Final safety check: truncate if still too long
-                    if len(content_json) > 10000:
-                        content_json = content_json[:9500] + '..."truncated": true}'
-                    
                     evidence_list.append(Evidence(
                         criterion_id=dim_id,
                         goal="Analyze git commit history for forensic signals (with semantic analysis)",
                         found=has_commits,
                         location=str(repo_path),
-                        content=content_json,
+                        content=_safe_content(git_result),
                         rationale=rationale,
                         confidence=confidence,
                     ))
@@ -186,19 +198,42 @@ Respond with a JSON object:
                         else:
                             state_file = find_file_recursive(repo_path, "state.py")
                             location = str(state_file) if state_file else str(repo_path / 'src' / 'state.py')
-                            rationale = (
-                                "Pydantic models with reducers detected."
-                                if (has_pydantic and has_reducers)
-                                else "Pydantic models or Annotated reducers missing."
-                            )
-                            confidence = 0.7 if (has_pydantic and has_reducers) else 0.4
+
+                            # Build detailed rationale from evidence
+                            details = []
+                            if has_pydantic:
+                                details.append("Pydantic BaseModel detected")
+                            if pd_result.get("has_typeddict"):
+                                details.append("TypedDict detected")
+                            if has_reducers:
+                                reducer_count = len(pd_result.get("reducer_fields", []))
+                                details.append(f"Annotated reducers found ({reducer_count} fields)")
+                            if pd_result.get("has_evidence"):
+                                details.append("Evidence model defined")
+                            if pd_result.get("has_judicial_opinion"):
+                                details.append("JudicialOpinion model defined")
+                            model_names = pd_result.get("model_names", [])
+                            if model_names:
+                                details.append(f"Models: {', '.join(model_names[:5])}")
+
+                            rationale = "; ".join(details) if details else "State analysis complete."
+
+                            # Confidence based on how much evidence we found
+                            if has_pydantic and has_reducers and pd_result.get("has_evidence"):
+                                confidence = 0.95  # Full implementation confirmed
+                            elif has_pydantic and has_reducers:
+                                confidence = 0.85  # Core patterns confirmed
+                            elif has_pydantic:
+                                confidence = 0.6   # Partial
+                            else:
+                                confidence = 0.4
                         
                         evidence_list.append(Evidence(
                             criterion_id=dim_id,
                             goal="Check Pydantic state models and reducers",
                             found=has_pydantic and has_reducers,
                             location=location,
-                            content=json.dumps(pd_result),
+                            content=_safe_content(pd_result),
                             rationale=rationale,
                             confidence=confidence,
                         ))
@@ -226,7 +261,7 @@ The file 'state.py' was not found. Suggest 3 most likely alternative locations o
                             goal="Check Pydantic state models",
                             found=False,
                             location="not_found",
-                            content=json.dumps({
+                            content=_safe_content({
                                 "error": "state.py not found",
                                 "searched_locations": [
                                     "src/state.py",
@@ -260,7 +295,7 @@ The file 'state.py' was not found. Suggest 3 most likely alternative locations o
                             goal="Check LangGraph StateGraph orchestration",
                             found=graph_result.get("found", False),
                             location=location,
-                            content=json.dumps(graph_result),
+                            content=_safe_content(graph_result),
                             rationale=rationale,
                             confidence=confidence,
                         ))
@@ -285,7 +320,7 @@ The file 'state.py' was not found. Suggest 3 most likely alternative locations o
                             goal="Check parallel fan-out/fan-in edges",
                             found=parallel_result.get("has_parallel_edges", False),
                             location=parallel_location,
-                            content=json.dumps(parallel_result),
+                            content=_safe_content(parallel_result),
                             rationale=parallel_rationale,
                             confidence=parallel_confidence,
                         ))
@@ -313,7 +348,7 @@ The file 'graph.py' was not found. Suggest 3 most likely alternative locations o
                             goal="Check LangGraph StateGraph orchestration",
                             found=False,
                             location="not_found",
-                            content=json.dumps({
+                            content=_safe_content({
                                 "error": "graph.py not found",
                                 "searched_locations": ["src/graph.py", "graph.py", "lib/graph.py"],
                                 "suggestion": suggestion or "Graph orchestration may be in a different file"
@@ -326,51 +361,92 @@ The file 'graph.py' was not found. Suggest 3 most likely alternative locations o
                     sandbox_result = check_sandboxing(repo_path)
                     security_result = check_security(repo_path)
 
+                    # Build detailed sandboxing rationale
+                    sandbox_details = []
+                    if sandbox_result.get("has_sandboxing"):
+                        sandbox_details.append("tempfile sandboxing detected")
+                    if sandbox_result.get("uses_subprocess"):
+                        sandbox_details.append("secure subprocess usage")
+                    if not sandbox_result.get("has_os_system"):
+                        sandbox_details.append("no os.system() calls")
+                    file_details = sandbox_result.get("file_details", [])
+                    if file_details:
+                        for fd in file_details[:3]:
+                            sandbox_details.append(f"{fd['file']}: {', '.join(fd['patterns'][:2])}")
+
+                    sandbox_rationale = "; ".join(sandbox_details) if sandbox_details else "Sandboxing check complete."
+                    sandbox_confidence = 0.4
+                    if sandbox_result.get("has_sandboxing") and not sandbox_result.get("has_os_system"):
+                        sandbox_confidence = 0.9  # Secure: has sandboxing, no os.system
+                    elif sandbox_result.get("has_sandboxing"):
+                        sandbox_confidence = 0.7  # Has sandboxing but also os.system
+
                     evidence_list.append(Evidence(
                         criterion_id=dim_id,
                         goal="Check sandboxing and subprocess usage",
                         found=sandbox_result.get("found", False),
                         location=str((repo_path / 'src' / 'tools')),
-                        content=json.dumps(sandbox_result),
-                        rationale=sandbox_result.get(
-                            "error",
-                            "Sandboxing and secure subprocess usage detected."
-                            if sandbox_result.get("has_sandboxing")
-                            else "No tempfile-based sandboxing detected."
-                        ),
-                        confidence=0.7 if sandbox_result.get("has_sandboxing") else 0.4,
+                        content=_safe_content(sandbox_result),
+                        rationale=sandbox_rationale,
+                        confidence=sandbox_confidence,
                     ))
 
                     security_issues = security_result.get("security_issues", [])
+                    if not security_issues:
+                        sec_rationale = ("AST analysis found 0 security anti-patterns "
+                                        "(no os.system, eval, or exec calls in src/).")
+                        sec_confidence = 0.95  # Verified clean via AST
+                    else:
+                        issue_summary = "; ".join(
+                            f"{i['file']}:{i.get('line','?')} {i['issue']}"
+                            for i in security_issues[:3]
+                        )
+                        sec_rationale = f"{len(security_issues)} issues: {issue_summary}"
+                        sec_confidence = 0.5
+
                     evidence_list.append(Evidence(
                         criterion_id=dim_id,
-                        goal="Check for security anti-patterns (os.system, eval, exec)",
+                        goal="Check for security anti-patterns (os.system, eval, exec) via AST",
                         found=security_result.get("found", False),
                         location=str((repo_path / 'src')),
-                        content=json.dumps(security_result),
-                        rationale=(
-                            f"Security issues detected: {len(security_issues)}"
-                            if security_issues
-                            else "No high-severity security issues detected."
-                        ),
-                        confidence=0.8 if not security_issues else 0.5,
+                        content=_safe_content(security_result),
+                        rationale=sec_rationale,
+                        confidence=sec_confidence,
                     ))
 
                 elif dim_id == "structured_output_enforcement":
                     so_result = check_structured_output(repo_path)
+
+                    has_so = so_result.get("has_structured_output", False)
+                    has_pydantic_val = so_result.get("has_pydantic_validation", False)
+                    methods = so_result.get("methods_used", {})
+
+                    so_details = []
+                    if methods.get("with_structured_output"):
+                        so_details.append(".with_structured_output() found")
+                    if methods.get("bind_tools"):
+                        so_details.append(".bind_tools() found")
+                    if has_pydantic_val:
+                        so_details.append("Pydantic validation (JudicialOpinion)")
+
+                    so_rationale = "; ".join(so_details) if so_details else "No structured output methods found."
+
+                    # High confidence when multiple methods confirmed
+                    if has_so and has_pydantic_val and len(so_details) >= 2:
+                        so_confidence = 0.95
+                    elif has_so:
+                        so_confidence = 0.8
+                    else:
+                        so_confidence = 0.4
+
                     evidence_list.append(Evidence(
                         criterion_id=dim_id,
                         goal="Check structured output enforcement in judges",
-                        found=so_result.get("has_structured_output", False),
+                        found=has_so,
                         location=str((repo_path / 'src' / 'nodes' / 'judges.py')),
-                        content=json.dumps(so_result),
-                        rationale=so_result.get(
-                            "error",
-                            "Structured output enforcement detected."
-                            if so_result.get("has_structured_output")
-                            else "No clear structured output enforcement detected."
-                        ),
-                        confidence=0.7 if so_result.get("has_structured_output") else 0.4,
+                        content=_safe_content(so_result),
+                        rationale=so_rationale,
+                        confidence=so_confidence,
                     ))
 
                 elif dim_id == "judicial_nuance":
@@ -397,7 +473,7 @@ The file 'graph.py' was not found. Suggest 3 most likely alternative locations o
                         goal="Check judge prompt diversity and persona differentiation",
                         found=nuance_result.get("found", False),
                         location=location,
-                        content=json.dumps(nuance_result),
+                        content=_safe_content(nuance_result),
                         rationale=rationale,
                         confidence=confidence,
                     ))
@@ -434,7 +510,7 @@ The file 'graph.py' was not found. Suggest 3 most likely alternative locations o
                         goal="Check deterministic synthesis rules in Chief Justice",
                         found=synthesis_result.get("found", False),
                         location=location,
-                        content=json.dumps(synthesis_result),
+                        content=_safe_content(synthesis_result),
                         rationale=rationale,
                         confidence=confidence,
                     ))
@@ -485,21 +561,30 @@ The file 'graph.py' was not found. Suggest 3 most likely alternative locations o
         return {
             "evidences": {"repo": evidence_list},
             "git_commit_hash": commit_hash,
+            # Expose the cloned repository root so other nodes (e.g. doc_analyst)
+            # can locate artifacts like reports/interim_report.* inside the
+            # sandboxed clone.
+            "repo_root": str(repo_path),
         }
 
     except Exception as e:
         # Clone itself failed — return error evidence for each dimension
         return {
-            "evidences": {"repo": [Evidence(
-                criterion_id="git_forensic_analysis",
-                goal="Clone and analyze repository",
-                found=False,
-                content=f"Clone failed: {e}",
-                location=repo_url,
-                rationale=f"Could not clone repository: {type(e).__name__}",
-                confidence=0.0,
-            )]},
+            "evidences": {
+                "repo": [
+                    Evidence(
+                        criterion_id="git_forensic_analysis",
+                        goal="Clone and analyze repository",
+                        found=False,
+                        content=f"Clone failed: {e}",
+                        location=repo_url,
+                        rationale=f"Could not clone repository: {type(e).__name__}",
+                        confidence=0.0,
+                    )
+                ]
+            },
             "git_commit_hash": "",
+            "repo_root": "",
         }
 
 
@@ -520,12 +605,37 @@ def doc_analyst_node(state: AgentState) -> dict:
     - Keyword depth: Search for key terms with context (not just buzzwords)
     - File path claims: Extract paths like src/...py for cross-referencing
     """
-    pdf_path = Path(state["pdf_path"])
     rubric_dimensions = state.get("rubric_dimensions", [])
 
+    # Start from the CLI-provided path as a fallback
+    report_path = Path(state["pdf_path"])
+    # Keep pdf_path alias for existing downstream references (locations, errors)
+    pdf_path = report_path
+
+    # Prefer the report that actually lives inside the audited repo:
+    # <cloned_repo>/reports/interim_report.{pdf,md,doc,docx}
+    #
+    # NOTE: repo_investigator_node already clones the repo, but because
+    # detectives run in parallel, doc_analyst cannot safely rely on
+    # state["repo_root"] being set in the same superstep. To keep the
+    # logic simple and robust, we perform a lightweight shallow clone
+    # here as well and look for reports/interim_report.* inside it.
     try:
-        # Step 1: Ingest the PDF
-        doc_data = ingest_pdf(pdf_path)
+        repo_url = state["repo_url"]
+        # Shallow clone is enough for locating the report file
+        repo_path, _ = safe_clone(repo_url, shallow=True)
+        for ext in (".pdf", ".md", ".doc", ".docx"):
+            candidate = repo_path / "reports" / f"interim_report{ext}"
+            if candidate.exists():
+                report_path = candidate
+                break
+    except Exception:
+        # If cloning fails here, we silently fall back to the original path
+        pass
+
+    try:
+        # Step 1: Ingest the report (PDF or Markdown) from the audited repo
+        doc_data = ingest_report(report_path)
 
         if not doc_data.get("success"):
             return {
@@ -533,9 +643,9 @@ def doc_analyst_node(state: AgentState) -> dict:
                     criterion_id="theoretical_depth",
                     goal="Ingest PDF report",
                     found=False,
-                    content=f"PDF ingestion failed: {doc_data.get('error', 'unknown')}",
-                    location=str(pdf_path),
-                    rationale="Could not parse PDF for analysis",
+                    content=f"Report ingestion failed: {doc_data.get('error', 'unknown')}",
+                    location=str(report_path),
+                    rationale="Could not parse report for analysis",
                     confidence=0.0,
                 )]},
             }
@@ -560,6 +670,20 @@ def doc_analyst_node(state: AgentState) -> dict:
                         "State Synchronization",
                     ]
                     keyword_results = search_keywords(chunks, keywords)
+
+                    # Also check for additional depth indicators that aren't in
+                    # the keyword list but show genuine theoretical thinking
+                    depth_keywords = [
+                        "trade-off", "rationale", "decision",
+                        "architectural", "design pattern",
+                    ]
+                    depth_hits = 0
+                    for chunk in chunks:
+                        chunk_text = chunk["content"].lower() if isinstance(chunk, dict) else str(chunk).lower()
+                        for dk in depth_keywords:
+                            if dk in chunk_text:
+                                depth_hits += 1
+                                break
                     
                     # Enhanced: Use LLM for semantic understanding of theoretical depth
                     semantic_analysis = None
@@ -569,15 +693,17 @@ def doc_analyst_node(state: AgentState) -> dict:
                             sample_chunks = []
                             total_chars = 0
                             for chunk in chunks[:10]:
-                                if total_chars + len(chunk) > 2000:
+                                # chunks are dicts: {"id": 0, "content": "...", "length": 123}
+                                chunk_text = chunk["content"] if isinstance(chunk, dict) else str(chunk)
+                                if total_chars + len(chunk_text) > 2000:
                                     break
-                                sample_chunks.append(chunk[:500])
-                                total_chars += len(chunk)
+                                sample_chunks.append(chunk_text[:500])
+                                total_chars += len(chunk_text)
                             
                             semantic_prompt = f"""Analyze this documentation for theoretical depth and architectural reasoning:
 
 Document excerpts:
-{chr(10).join([f"[Chunk {i+1}]: {chunk[:400]}..." for i, chunk in enumerate(sample_chunks)])}
+{chr(10).join([f"[Chunk {i+1}]: {text[:400]}..." for i, text in enumerate(sample_chunks)])}
 
 Assess:
 1. Does it explain architectural decisions and trade-offs?
@@ -618,11 +744,15 @@ Respond with JSON:
                     
                     has_keywords = keyword_results["summary"]["total_occurrences"] > 0
                     has_depth = semantic_analysis and semantic_analysis.get("has_theoretical_depth", False)
-                    found = has_keywords or has_depth
+                    has_architecture = depth_hits >= 3  # At least 3 chunks with trade-off/rationale language
+                    found = has_keywords or has_depth or has_architecture
                     
-                    keyword_confidence = 0.8 if keyword_results["summary"]["substantive_occurrences"] > 0 else 0.3
+                    keyword_confidence = 0.9 if keyword_results["summary"]["substantive_occurrences"] > 0 else (
+                        0.7 if keyword_results["summary"]["total_occurrences"] > 0 else 0.3
+                    )
                     semantic_confidence = semantic_analysis.get("depth_score", 0.5) if semantic_analysis else 0.0
-                    confidence = max(keyword_confidence, semantic_confidence * 0.9)
+                    architecture_bonus = min(0.2, depth_hits * 0.04)  # Up to +0.2 for depth language
+                    confidence = min(0.95, max(keyword_confidence, semantic_confidence * 0.9) + architecture_bonus)
                     
                     rationale = (
                         f"Found {keyword_results['summary']['total_occurrences']} keyword occurrences, "
@@ -640,7 +770,7 @@ Respond with JSON:
                         criterion_id=dim_id,
                         goal="Search for key architectural terms with context (enhanced with semantic analysis)",
                         found=found,
-                        content=json.dumps(combined_results, indent=2),
+                        content=_safe_content(combined_results),
                         location=str(pdf_path),
                         rationale=rationale,
                         confidence=confidence,
@@ -653,7 +783,7 @@ Respond with JSON:
                         criterion_id=dim_id,
                         goal="Extract file path claims for cross-referencing",
                         found=len(claimed_paths) > 0,
-                        content=json.dumps({"claimed_paths": claimed_paths}),
+                        content=_safe_content({"claimed_paths": claimed_paths}),
                         location=str(pdf_path),
                         rationale=(
                             f"Extracted {len(claimed_paths)} file path claims. "
@@ -704,11 +834,30 @@ def vision_inspector_node(state: AgentState) -> dict:
 
     Uses Gemini (multimodal) to classify and analyze architectural diagrams.
     """
-    pdf_path = Path(state["pdf_path"])
+    # Start from the CLI-provided path as a fallback
+    report_path = Path(state["pdf_path"])
     rubric_dimensions = state.get("rubric_dimensions", [])
 
+    # Prefer the report that actually lives inside the audited repo:
+    # <cloned_repo>/reports/interim_report.{pdf,md,doc,docx}
     try:
-        images = extract_images_from_pdf(pdf_path)
+        repo_url = state["repo_url"]
+        # Shallow clone is enough for locating the report file
+        repo_path, _ = safe_clone(repo_url, shallow=True)
+        for ext in (".pdf", ".md", ".doc", ".docx"):
+            candidate = repo_path / "reports" / f"interim_report{ext}"
+            if candidate.exists():
+                report_path = candidate
+                break
+    except Exception:
+        # If cloning fails here, we silently fall back to the original path
+        pass
+
+    try:
+        # Extract diagram-like artifacts from the report:
+        # - real images for PDFs
+        # - mermaid diagrams for markdown
+        images = extract_diagrams_from_report(report_path)
 
         evidence_list = []
         for dimension in rubric_dimensions:
@@ -788,7 +937,8 @@ Respond with JSON:
             if classification_result and classification_result.get("is_architectural"):
                 found = True
             
-            rationale = f"Found {len(images)} images in PDF."
+            # Rationale reflects both PDFs and markdown (mermaid) sources
+            rationale = f"Found {len(images)} diagram/image artifacts in report."
             if classification_result and not classification_result.get("error"):
                 rationale += f" Gemini classification: {classification_result.get('diagram_type', 'unknown')} diagram. "
                 rationale += classification_result.get("rationale", "")[:150]
@@ -803,8 +953,8 @@ Respond with JSON:
                 criterion_id=dim_id,
                 goal="Extract and classify architectural diagrams using Gemini multimodal analysis",
                 found=found,
-                content=json.dumps(combined_results, indent=2),
-                location=str(pdf_path),
+                content=_safe_content(combined_results),
+                location=str(report_path),
                 rationale=rationale,
                 confidence=confidence,
             ))
@@ -860,12 +1010,52 @@ def evidence_aggregator_node(state: AgentState) -> dict:
     cross_ref_evidence = []
 
     # ── Hallucination Detection ──
+    # Step 1: Build set of actual filenames from repo evidence locations
     actual_filenames = set()
-    for repo_ev in repo_evidence:
-        if repo_ev.location and repo_ev.location != "not_found":
-            loc = repo_ev.location.split(":")[0]
-            actual_filenames.add(Path(loc).name)
+    repo_path = None
 
+    for repo_ev in repo_evidence:
+        if repo_ev.location and repo_ev.location not in ("not_found", "not_implemented"):
+            loc = repo_ev.location
+            if loc.startswith("http") or loc.startswith("cross_ref"):
+                continue
+            try:
+                normalized = loc.replace("\\", "/")
+                filename = normalized.split("/")[-1]
+                if ":" in filename and not filename[1:2] == ":":
+                    filename = filename.split(":")[0]
+                if filename and "." in filename:
+                    actual_filenames.add(filename)
+
+                # Try to extract the cloned repo root path for filesystem check
+                if repo_path is None and "auditor_repo_" in normalized:
+                    # Extract: ".../auditor_repo_xxx/repo" from the full path
+                    repo_idx = normalized.find("auditor_repo_")
+                    if repo_idx >= 0:
+                        # Find the "repo" segment after auditor_repo_xxx
+                        rest = normalized[repo_idx:]
+                        parts = rest.split("/")
+                        if len(parts) >= 2:
+                            repo_path = Path(loc.replace("\\", "/").split("auditor_repo_")[0]
+                                             + parts[0] + "/" + parts[1])
+                            # On Windows, reconstruct with original separator
+                            repo_path = Path(repo_ev.location.split("auditor_repo_")[0]
+                                             + parts[0] + "/" + parts[1])
+            except (ValueError, OSError):
+                continue
+
+    # Step 2: If we found the repo path, do a real filesystem check
+    # This is much more reliable than matching against evidence location strings
+    if repo_path and repo_path.exists():
+        try:
+            # Build a complete set of filenames from the actual repo
+            for py_file in repo_path.rglob("*"):
+                if py_file.is_file():
+                    actual_filenames.add(py_file.name)
+        except (OSError, PermissionError):
+            pass  # Fall back to evidence-based filenames
+
+    # Step 3: Find report_accuracy evidence containing claimed paths
     for doc_ev in doc_evidence:
         if doc_ev.criterion_id != "report_accuracy":
             continue
@@ -878,10 +1068,16 @@ def evidence_aggregator_node(state: AgentState) -> dict:
         except (json.JSONDecodeError, TypeError):
             continue
 
+        # Step 4: Check each claimed path against actual files
         for claimed_path in claimed_paths:
             claimed_filename = Path(claimed_path).name
 
             if claimed_filename not in actual_filenames:
+                # Confidence depends on how we verified:
+                # - If we walked the repo filesystem: high confidence (0.85)
+                # - If we only matched evidence strings: medium confidence (0.6)
+                verification_confidence = 0.85 if (repo_path and repo_path.exists()) else 0.6
+
                 cross_ref_evidence.append(Evidence(
                     criterion_id="report_accuracy",
                     goal=f"HALLUCINATION: Report claims '{claimed_path}' exists",
@@ -889,25 +1085,32 @@ def evidence_aggregator_node(state: AgentState) -> dict:
                     content=claimed_path,
                     location=f"cross_ref:{claimed_path}",
                     rationale=(
-                        f"Filename '{claimed_filename}' not found in repo evidence. "
-                        f"Known files: {sorted(actual_filenames)}"
+                        f"Filename '{claimed_filename}' not found in repo. "
+                        f"Verified against {len(actual_filenames)} known files."
                     ),
-                    confidence=0.9,
+                    confidence=verification_confidence,
                 ))
 
+    # Step 5: Summary
     if cross_ref_evidence:
         hallucination_count = len(cross_ref_evidence)
+        verified_method = "filesystem scan" if (repo_path and repo_path.exists()) else "evidence locations"
         cross_ref_evidence.append(Evidence(
             criterion_id="report_accuracy",
             goal="Cross-reference summary",
             found=True,
-            content=f"{hallucination_count} hallucinated paths detected",
+            content=_safe_content({
+                "hallucinated_count": hallucination_count,
+                "total_known_files": len(actual_filenames),
+                "verification_method": verified_method,
+            }),
             location="cross_ref:summary",
             rationale=(
                 f"Found {hallucination_count} file paths in the PDF report "
-                "that do not match any files found by the repo detective."
+                f"that do not match any of {len(actual_filenames)} files in the repo "
+                f"(verified via {verified_method})."
             ),
-            confidence=0.95,
+            confidence=0.9 if (repo_path and repo_path.exists()) else 0.7,
         ))
 
     return {

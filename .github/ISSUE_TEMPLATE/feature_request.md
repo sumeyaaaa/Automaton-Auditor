@@ -26,6 +26,3 @@ A clear and concise description of any alternative solutions or features you've 
 
 Add any other context, mockups, or examples about the feature request here.
 
-
-
-

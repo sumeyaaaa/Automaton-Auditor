@@ -147,7 +147,9 @@ def _synthesize_score(
     """Apply deterministic synthesis rules to resolve score conflicts.
     
     Rules:
-    1. Security Override: Security flaws cap score at 3
+    1. Security Override: Actual security violations cap score at 3
+       (triggered by low prosecutor score + violation phrases, NOT by
+       mere mention of security-related words in praise)
     2. Fact Supremacy: Evidence overrules opinion
     3. Functionality Weight: Tech Lead carries weight for architecture
     4. Variance Re-evaluation: High variance triggers re-evaluation
@@ -158,22 +160,28 @@ def _synthesize_score(
         return 1
     
     # Rule 1: Security Override
+    # Only cap the score when the Prosecutor ACTUALLY found security problems
+    # (indicated by a low prosecutor score), not just because they mentioned
+    # security-related words in their argument (which could be praise).
     prosecutor_opinion = next(
         (op for op in opinions if op.judge == "Prosecutor"), None
     )
-    if prosecutor_opinion:
-        prosecutor_arg = prosecutor_opinion.argument.lower()
-        security_keywords = [
-            "security",
-            "vulnerability",
-            "sandbox",
-            "os.system",
-            "injection",
-            "unsanitized",
+    if prosecutor_score is not None and prosecutor_score <= 2:
+        prosecutor_arg = prosecutor_opinion.argument.lower() if prosecutor_opinion else ""
+        security_violation_phrases = [
+            "os.system() call",
+            "os.system() detected",
+            "eval() call",
+            "exec() call",
+            "injection risk",
+            "unsanitized input",
+            "arbitrary command",
+            "catastrophic security",
+            "fundamentally unsafe",
         ]
-        if any(keyword in prosecutor_arg for keyword in security_keywords):
-            if "safe_tool_engineering" in dimension_id or "security" in prosecutor_arg:
-                return min(3, max(scores))  # Cap at 3
+        if any(phrase in prosecutor_arg for phrase in security_violation_phrases):
+            if "safe_tool_engineering" in dimension_id:
+                return min(3, max(scores))  # Cap at 3 only for actual violations
     
     # Rule 2: Fact Supremacy (handled via evidence confidence in opinions)
     # If evidence confidence is low, prosecutor's low score is weighted higher
@@ -512,4 +520,3 @@ def _generate_comprehensive_remediation_plan(
             plan_parts.append(f"- {cr.dimension_name}: {cr.remediation}")
     
     return "\n".join(plan_parts)
-
