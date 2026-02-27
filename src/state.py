@@ -305,7 +305,7 @@ class AgentState(TypedDict):
         graph.invoke({
             "repo_url": url,
             "pdf_path": path,
-            "rubric_path": "rubric.json",
+            "rubric_path": "rubric/week2_rubric.json",
             "git_commit_hash": "",
             "model_metadata": {},
             "rubric_dimensions": [],

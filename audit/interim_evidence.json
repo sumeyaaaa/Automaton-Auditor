@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "repo_url": "https://github.com/sumeyaaaa/Automaton-Auditor",
+    "repo_url": "https://github.com/Abnet-Melaku1/automation-auditor",
     "pdf_path": "reports/interim_report.pdf",
-    "git_commit_hash": "ff497d08",
-    "timestamp": "2026-02-26T18:13:11.020847",
+    "git_commit_hash": "7bb891b1",
+    "timestamp": "2026-02-27T14:34:34.807686",
     "model_metadata": {
       "investigator": {
         "model": "deepseek-chat",
@@ -32,11 +32,11 @@
       {
         "criterion_id": "theoretical_depth",
         "goal": "Search for key architectural terms with context (enhanced with semantic analysis)",
-        "found": false,
+        "found": true,
         "location": "reports\\interim_report.pdf",
-        "confidence": 0.45,
-        "rationale": "Found 0 keyword occurrences, 0 substantive.",
-        "content": "{\n  \"keyword_results\": {\n    \"keywords\": [\n      \"Dialectical Synthesis\",\n      \"Fan-In / Fan-Out\",\n      \"Fan-In/Fan-Out\",\n      \"Metacognition\",\n      \"State Synchronization\"\n    ],\n    \"matches\": {\n      \"Dialectical Synthesis\": [],\n      \"Fan-In / Fan-Out\": [],\n      \"Fan-In/Fan-Out\": [],\n      \"Metacognition\": [],\n      \"State Synchronization\": []\n    },\n    \"summary\": {\n      \"total_occurrences\": 0,\n      \"substantive_occurrences\": 0,\n      \"keyword_dropping\": 0\n    }\n  },\n  \"semantic_analysis\": {\n    \"error\": \"unhashable type: 'slice'\"\n  }\n}"
+        "confidence": 0.95,
+        "rationale": "Found 33 keyword occurrences, 11 substantive. Semantic analysis: The documentation explicitly frames the problem within theoretical AI-native software engineering pa",
+        "content": "{\"keyword_results\": {\"keywords\": [\"Dialectical Synthesis\", \"Fan-In / Fan-Out\", \"Fan-In/Fan-Out\", \"Metacognition\", \"State Synchronization\"], \"matches\": {\"Dialectical Synthesis\": [{\"chunk_id\": 1, \"matched_variant\": \"dialectical\", \"context\": \"al Courtroom**: an autonomous, hierarchical multi-agent system that accepts a GitHub repository URL and an architectural PDF report, prosecutes the submission through structured forensic analysis and dialectical judicial review, and produces a final `AuditReport` that provides specific, file-level r\", \"has_substance\": true}, {\"chunk_id\": 2, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"----------------- | ----------------------------- |\\n| **Detective Layer** | `repo_investigator`, `doc_analyst`, _(future)_ `vision_inspector` | \\u2705 Implemented                |\\n| **Judicial Layer**  | `prosecutor`, `defense`, `tech_lead`                              | \\ud83d\\udd32 Planned (final submission) |\\n| \", \"has_substance\": false}, {\"chunk_id\": 4, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"The Judicial Layer output is a `JudicialOpinion` model ([`src/state.py:122`](../src/state.py)):\\n\\n```python\\nclass JudicialOpinion(BaseModel):\\n    judge:           Literal[\\\"Prosecutor\\\", \\\"Defense\\\", \\\"TechLead\\\"]\\n    criterion_id:    str\\n    score:           int          # ge=1, le=5  \\u2014 validated by Pydan\", \"has_substance\": true}, {\"chunk_id\": 13, \"matched_variant\": \"dialectical synthesis\", \"context\": \"unctional in offline test environments.\\n\\n#### Substantiveness Heuristic \\u2014 Detecting Keyword Dropping\\n\\nThe rubric's `theoretical_depth` criterion distinguishes between a candidate who _uses_ the term \\\"Dialectical Synthesis\\\" and one who _understands_ it. Simply searching for the presence of the string\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"dialectical synthesis\", \"context\": \"`\\n\\nA term occurrence is only classified as `in_substantive_context=True` if its containing paragraph also contains at least one word from `_SUBSTANTIVE_VERBS`. A paragraph that reads _\\\"We implemented Dialectical Synthesis via three parallel judge personas\\\"_ passes; a sentence that reads _\\\"Our system\", \"has_substance\": false}, {\"chunk_id\": 15, \"matched_variant\": \"dialectical\", \"context\": \"rence using the `Evidence.location` fields accumulated from the RepoInvestigator's protocols as the authoritative file list.\\n\\n---\\n\\n## 4. Known Gaps & Planned Development\\n\\n### 4.1 Judicial Layer \\u2014 The Dialectical Bench\\n\\nThe Judicial Layer will introduce three Judge node functions in `src/nodes/judges\", \"has_substance\": true}, {\"chunk_id\": 19, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"```python\\n# Deterministic rule: confirmed security violation caps score at 3\\nif any(\\n    \\\"security\\\" in op.argument.lower() and op.judge == \\\"Prosecutor\\\"\\n    for op in criterion_opinions\\n):\\n    final_score = min(3, tech_lead_score)\\n\\n# Deterministic rule: score variance > 2 requires dissent summary\\neli\", \"has_substance\": false}, {\"chunk_id\": 25, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"  # build_graph(), evidence_aggregator_node, run_interim_audit()\\n    \\u251c\\u2500\\u2500 nodes/\\n    \\u2502   \\u251c\\u2500\\u2500 detectives.py   # repo_investigator_node, doc_analyst_node\\n    \\u2502   \\u251c\\u2500\\u2500 judges.py       # [final submission] Prosecutor, Defense, TechLead\\n    \\u2502   \\u2514\\u2500\\u2500 justice.py      # [final submission] ChiefJusticeNode\\n    \", \"has_substance\": false}], \"Fan-In / Fan-Out\": [{\"chunk_id\": 1, \"matched_variant\": \"concurrent\", \"context\": \"ous agents generate features at machine speed, the human review bottleneck shifts from \\\"can we produce it?\\\" to \\\"can we trust it?\\\". Manual pull-request review cannot scale to the output of hundreds of concurrent agents.\\n\\nThe Automaton Auditor addresses this directly. Its mission is to operate as a **\", \"has_substance\": false}, {\"chunk_id\": 6, \"matched_variant\": \"concurrent\", \"context\": \"#### `operator.ior` \\u2014 Dict Merge for the Detective Layer\\n\\nWhen `repo_investigator_node` and `doc_analyst_node` execute concurrently, each returns a partial state update containing `{\\\"evidences\\\": {criterion_id: [Evidence, ...]}}`. Without a reducer, whichever node finishes second would silently overw\", \"has_substance\": false}, {\"chunk_id\": 7, \"matched_variant\": \"concurrent\", \"context\": \"When the three Judge nodes execute concurrently in the final submission, each returns `{\\\"opinions\\\": [JudicialOpinion(...)]}`. `operator.add` concatenates these lists rather than replacing them:\\n\\n```\\nstate[\\\"opinions\\\"] = (\\n    prosecutor_output[\\\"o\", \"has_substance\": false}, {\"chunk_id\": 10, \"matched_variant\": \"fan-in\", \"context\": \"onal)`\\n- Derives a `ParallelismReport` by grouping edges by source node: any source with two or more destinations is a confirmed **fan-out**; any destination with two or more sources is a confirmed **fan-in**\\n- Reports `is_purely_linear=True` when no fan-out exists \\u2014 the evidence for an \\\"Orchestrati\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"fan-in\", \"context\": \"```python\\n_SUBSTANTIVE_VERBS = frozenset({\\n    \\\"implemented\\\", \\\"executes\\\", \\\"using\\\", \\\"through\\\", \\\"via\\\",\\n    \\\"because\\\", \\\"whereby\\\", \\\"enables\\\", \\\"fan-out\\\", \\\"fan-in\\\",\\n    \\\"parallel\\\", \\\"graph\\\", \\\"node\\\", ...\\n})\\n\\ndef _is_substantive(text: str) -> bool:\\n    return any(indicator in text.lower() for indicator in _S\", \"has_substance\": true}, {\"chunk_id\": 15, \"matched_variant\": \"fan-in\", \"context\": \"cannot access the repo file listing at execution time.\\n\\nThe solution: DocAnalyst extracts all claimed paths using a regex over the full Markdown text and records them in `Evidence.content`. After the fan-in, `evidence_aggregator_node` in `src/graph.py` performs the secondary cross-reference using th\", \"has_substance\": true}, {\"chunk_id\": 17, \"matched_variant\": \"parallel execution\", \"context\": \"-------------------------------------------- |\\n| **Prosecutor**       | _\\\"Trust No One. Assume Vibe Coding.\\\"_    | Maximise scrutiny. If the evidence shows a linear pipeline where the rubric requires parallel execution, argue Score 1 and cite the specific `EdgeCall` objects from `GraphStructureRepor\", \"has_substance\": false}, {\"chunk_id\": 18, \"matched_variant\": \"fan-in\", \"context\": \"e Pydantic schema. Malformed responses trigger a retry before propagating failure.\\n\\nThe three nodes will run in a second **parallel fan-out** from `evidence_aggregator` to a new `judicial_aggregator` fan-in, mirroring the Detective topology.\\n\\n### 4.2 Synthesis Engine \\u2014 The Chief Justice\\n\\n`ChiefJusti\", \"has_substance\": false}, {\"chunk_id\": 21, \"matched_variant\": \"fan-out\", \"context\": \"completeness check\\\\nsecondary cross-reference \\u2461\\\\nLangSmith summary log\\\"]:::aggregator\\n    IEND[\\\"interim_end_node\\\\n(Judicial Layer placeholder)\\\"]:::terminal\\n    END_NODE([END]):::entry\\n\\n    START -->|\\\"fan-out\\\"| REPO\\n    START -->|\\\"fan-out\\\"| DOC\\n    REPO -->|\\\"evidences merged via operator.ior\\\"| AGG\\n  \", \"has_substance\": false}, {\"chunk_id\": 23, \"matched_variant\": \"fan-in\", \"context\": \"    REPO[\\\"RepoInvestigatorNode\\\"]:::detective\\n    DOC[\\\"DocAnalystNode\\\"]:::detective\\n    VIS[\\\"VisionInspectorNode\\\\n(implementation req.\\\\nexecution optional)\\\"]:::detective\\n    EAGG[\\\"EvidenceAggregator\\\\n(fan-in)\\\"]:::aggregator\\n    PROS[\\\"ProsecutorNode\\\\n.with_structured_output\\\\n(JudicialOpinion)\\\"]:::judg\", \"has_substance\": false}], \"Fan-In/Fan-Out\": [{\"chunk_id\": 10, \"matched_variant\": \"fan-in\", \"context\": \"onal)`\\n- Derives a `ParallelismReport` by grouping edges by source node: any source with two or more destinations is a confirmed **fan-out**; any destination with two or more sources is a confirmed **fan-in**\\n- Reports `is_purely_linear=True` when no fan-out exists \\u2014 the evidence for an \\\"Orchestrati\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"fan-in\", \"context\": \"```python\\n_SUBSTANTIVE_VERBS = frozenset({\\n    \\\"implemented\\\", \\\"executes\\\", \\\"using\\\", \\\"through\\\", \\\"via\\\",\\n    \\\"because\\\", \\\"whereby\\\", \\\"enables\\\", \\\"fan-out\\\", \\\"fan-in\\\",\\n    \\\"parallel\\\", \\\"graph\\\", \\\"node\\\", ...\\n})\\n\\ndef _is_substantive(text: str) -> bool:\\n    return any(indicator in text.lower() for indicator in _S\", \"has_substance\": true}, {\"chunk_id\": 15, \"matched_variant\": \"fan-in\", \"context\": \"cannot access the repo file listing at execution time.\\n\\nThe solution: DocAnalyst extracts all claimed paths using a regex over the full Markdown text and records them in `Evidence.content`. After the fan-in, `evidence_aggregator_node` in `src/graph.py` performs the secondary cross-reference using th\", \"has_substance\": true}, {\"chunk_id\": 17, \"matched_variant\": \"parallel execution\", \"context\": \"-------------------------------------------- |\\n| **Prosecutor**       | _\\\"Trust No One. Assume Vibe Coding.\\\"_    | Maximise scrutiny. If the evidence shows a linear pipeline where the rubric requires parallel execution, argue Score 1 and cite the specific `EdgeCall` objects from `GraphStructureRepor\", \"has_substance\": false}, {\"chunk_id\": 18, \"matched_variant\": \"fan-in\", \"context\": \"e Pydantic schema. Malformed responses trigger a retry before propagating failure.\\n\\nThe three nodes will run in a second **parallel fan-out** from `evidence_aggregator` to a new `judicial_aggregator` fan-in, mirroring the Detective topology.\\n\\n### 4.2 Synthesis Engine \\u2014 The Chief Jus... [TRUNCATED, original 14002 chars]"
       },
       {
         "criterion_id": "report_accuracy",
@@ -44,8 +44,8 @@
         "found": true,
         "location": "reports\\interim_report.pdf",
         "confidence": 0.9,
-        "rationale": "Extracted 4 file path claims. Awaiting cross-reference by evidence_aggregator.",
-        "content": "{\"claimed_paths\": [\"graph.py\", \"judges.py\", \"src/tools/ast_tools.py\", \"tools/git.py\"]}"
+        "rationale": "Extracted 22 file path claims. Awaiting cross-reference by evidence_aggregator.",
+        "content": "{\"claimed_paths\": [\"nsrc/nodes/detectives.py\", \"pyproject.toml\", \"src/graph.py\", \"src/nodes/detectives.py\", \"src/tools/repo_tools.py\", \"./src/state.py\", \"detectives.py\", \"doc_tools.py\", \"./src/tools/doc_tools.py\", \"src/state.py\", \"state.py\", \"rubric.json\", \"judges.py\", \"./src/tools/repo_tools.py\", \"repo_tools.py\", \"src/nodes/judges.py\", \"rubric/rubric.json\", \"graph.py\", \"src/tools/doc_tools.py\", \"nsrc/graph.py\", \"justice.py\", \"src/nodes/justice.py\"]}"
       }
     ],
     "repo": [
@@ -53,100 +53,100 @@
         "criterion_id": "git_forensic_analysis",
         "goal": "Analyze git commit history for forensic signals (with semantic analysis)",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo",
         "confidence": 0.9,
-        "rationale": "Git history analyzed successfully. Semantic analysis: The commits follow a logical progression from project setup (gitignore, environment config) to depen",
-        "content": "{\"total_commits\": 29, \"commits\": [{\"hash\": \"279ffdfa\", \"message\": \"feat: add wrapper modules repo_tools.py and doc_tools.py for compatibility\", \"timestamp\": \"2026-02-25T13:29:17+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"19e70101\", \"message\": \"chore: add tools package __init__.py\", \"timestamp\": \"2026-02-25T13:29:55+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"0a148ba2\", \"message\": \"feat: implement detectives.py with RepoInvestigator, DocAnalyst, VisionInspector, and EvidenceAggregator\", \"timestamp\": \"2026-02-25T13:30:10+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"7baea43a\", \"message\": \"chore: add nodes package __init__.py\", \"timestamp\": \"2026-02-25T13:30:53+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"af31ca46\", \"message\": \"feat: implement graph.py with create_interim_graph and create_auditor_graph\", \"timestamp\": \"2026-02-25T13:31:13+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"82e51d99\", \"message\": \"chore: add src package __init__.py\", \"timestamp\": \"2026-02-25T13:32:14+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"30191b10\", \"message\": \"feat: add rubric.json and rubric directory with evaluation criteria\", \"timestamp\": \"2026-02-25T13:33:19+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"5e2253fd\", \"message\": \"docs: update README.md with installation, usage, and interim audit instructions\", \"timestamp\": \"2026-02-25T13:34:04+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"f4e4e39b\", \"message\": \"test: add unit tests for state, git_tools, and ast_tools\", \"timestamp\": \"2026-02-25T13:34:12+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"7ecde286\", \"message\": \"docs: add spec-driven development files and architecture documentation\", \"timestamp\": \"2026-02-25T13:34:25+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"412b722f\", \"message\": \"chore: update .gitignore to exclude Python artifacts and cache files\", \"timestamp\": \"2026-02-25T14:31:37+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"eba3ceb4\", \"message\": \"chore: update pyproject.toml with pytest-cov in dev-dependencies\", \"timestamp\": \"2026-02-25T14:31:52+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"3407a052\", \"message\": \"chore: add uv.lock for dependency locking\", \"timestamp\": \"2026-02-25T14:32:05+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"bcaa10f9\", \"message\": \"feat: add judges.py and justice.py (already implemented, now tracked)\", \"timestamp\": \"2026-02-25T14:32:15+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"12646303\", \"message\": \"docs: add interim_report.pdf for interim submission\", \"timestamp\": \"2026-02-25T14:32:24+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"648c7c45\", \"message\": \"ci: add GitHub Actions workflows for CI/CD and testing\", \"timestamp\": \"2026-02-25T14:36:30+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"7b3de674\", \"message\": \"fix(security): clarify API key placeholders in documentation\\n\\n- Updated .env.example with explicit warnings that placeholders are not actual keys\\n- Replaced 'sk-...' and 'lsv2_pt_...' placeholders in ...\", \"timestamp\": \"2026-02-25T14:53:14+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"3ee2a25d\", \"message\": \"feat: implement production-grade improvements\\n\\n- Enhanced validation: Added richer Pydantic validators with detailed error messages\\n  - Evidence validation: confidence-rationale alignment, content req...\", \"timestamp\": \"2026-02-25T15:13:27+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"ce1c3b26\", \"message\": \"feat: enhance n with comprehensive evidence output\\n\\n- Enhanced evidence JSON output with complete fields:\\n  - Added rationale and content fields (with truncation for long content)\\n  - Added content_tr...\", \"timestamp\": \"2026-02-25T15:19:43+03:00\", \"author\": \"sumeyaaaa\"}, {\"hash\": \"ff497d08\", \"message\": \"fix: remove confidence validation ambiguity in Evidence model\\n\\n- Changed found=True threshold from >=0.3 to >=0.5\\n- Changed found=False threshold from <=0.5 to <=0.4\\n- Removes overlap zone [0.3, 0.5] ...\", \"timestamp\": \"2026-02-26T07:44:41+03:00\", \"author\": \"sumeyaaaa\"}], \"is_atomic\": true, \"has_progression\": true, \"log_output\": \"e9af8c3 Initial commit\\n54e5d53 chore: add .gitignore for environment variables\\n44b041c chore: add .env.example with required environment variables\\nc0ef36c feat: add pyproject.toml with dependencies and pytest configuration\\n83a0f39 feat: implement state.py with Pydantic models and AgentState\\n14c9e5a feat: implement config.py for LLM factory and model management\\ne6a39fc feat: implement git_tools.py with safe_clone and extract_git_history\\n962b371 feat: implement ast_tools.py with AST-based code analysis\\n0bd51ba feat: implement pdf_tools.py with PDF parsing and chunking\\n279ffdf feat: add wrapper modules repo_tools.py and doc_tools.py for compatibility\\n19e7010 chore: add tools package __init__.py\\n0a148ba feat: implement detectives.py with RepoInvestigator, DocAnalyst, VisionInspector, and EvidenceAggregator\\n7baea43 chore: add nodes package __init__.py\\naf31ca4 feat: implement graph.py with create_interim_graph and create_auditor_graph\\n82e51d9 chore: add src package __init__.py\\n30191b1 feat: add rubric.json and rubric directory with evaluation criteria\\n5e2253f docs: update README.md with installation, usage, and interim audit instructions\\nf4e4e39 test: add unit tests for state, git_tools, and ast_tools\\n7ecde28 docs: add spec-driven development files and architecture documentation\\n412b722 chore: update .gitignore to exclude Python artifacts and cache files\\neba3ceb chore: update pyproject.toml with pytest-cov in dev-dependencies\\n3407a05 chore: add uv.lock for dependency locking\\nbcaa10f feat: add judges.py and justice.py (already implemented, now tracked)\\n1264630 docs: add interim_report.pdf for interim submission\\n648c7c4 ci: add GitHub Actions workflows for CI/CD and testing\\n7b3de67 fix(security): clarify API key placeholders in documentation\\n3ee2a25 feat: implement production-grade improvements\\nce1c3b2 feat: enhance n with comprehensive evidence output\\nff497d0 fix: remove confidence validation ambiguity in Evidence model\\n\", \"semantic_analysis\": {\"is_iterative\": true, \"is_atomic\": true, \"shows_progression\": true, \"rationale\": \"The commits follow a logical progression from project setup (gitignore, environment config) to dependency management (pyproject.toml) to core implementation (state, config, tools). Each commit addresses a single logical concern with clear semantic prefixes (chore/feat).\"}, \"commits_truncated\": 9}"
+        "rationale": "Git history analyzed successfully. Semantic analysis: Commits follow a logical progression from infrastructure setup to feature implementation, with each ",
+        "content": "{\"total_commits\": 11, \"commits\": [{\"hash\": \"537a18f7\", \"message\": \"chore: initialise project infrastructure\\n\\nAdd .gitignore, pyproject.toml (uv), and .env.example. Configures Ruff, Mypy, and Pytest.\", \"timestamp\": \"2026-02-23T09:14:22+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"5208b2ce\", \"message\": \"feat(rubric): add machine-readable rubric.json v3.0.0\\n\\nThe agent's 'Constitution' \\u2014 10 graded dimensions with forensic instructions and synthesis rules.\", \"timestamp\": \"2026-02-24T10:45:10+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"369dfd2f\", \"message\": \"feat(state): implement AgentState and Pydantic models\\n\\nAdd Evidence, JudicialOpinion, and AgentState with operator.ior and operator.add reducers for parallel safety.\", \"timestamp\": \"2026-02-24T15:20:44+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"2760a1eb\", \"message\": \"chore(tools): add src/tools package init\", \"timestamp\": \"2026-02-25T13:10:15+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"e20058be\", \"message\": \"feat(tools): implement RepoInvestigator forensic tools\\n\\nImplement 4-layer architecture: RepoManager sandbox, AST-based GraphForensics for parallel topology detection, and RepoInvestigator facade. Replaces regex with ast.parse to verify fan-out/fan-in wiring.\", \"timestamp\": \"2026-02-25T15:45:30+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"2618d31b\", \"message\": \"feat(tools): implement DocumentAuditor with RAG-lite PDF analysis\\n\\nIntegrate docling for ingest-once/query-many PDF analysis. Includes substantiveness heuristics to detect 'keyword dropping' and cross-referencing to flag hallucinated file paths.\", \"timestamp\": \"2026-02-25T17:20:12+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"ec5c97b3\", \"message\": \"chore(nodes): add src/nodes package init\", \"timestamp\": \"2026-02-25T22:06:30+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"9aa599e1\", \"message\": \"feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\\n\\nEach node is a pure state transformer returning\\n{'evidences': {criterion_id: [Evidence, ...]}}\\nwhich merges into AgentState.evidences via operator.ior.\\n\\n- repo_investigator_node wraps RepoInvestigator.run_all() and\\n  covers all 5 github_repo rubric criteria; CloneError and\\n  ValueError are caught and surfaced as Evidence so the graph\\n  never crashes on bad URLs or unreachable repos.\\n\\n- doc_analyst_node wraps DocumentAuditor (docling + fallback);\\n  covers theoretical_depth (substantiveness check for 5 rubric\\n  terms) and report_accuracy (path extraction); cross-reference\\n  against repo structure is deferred to EvidenceAggregator\\n  because both detectives run in parallel.\\n\\n- Module-level rubric loaded once via reliable __file__ path;\\n  _REPO_CRITERIA / _PDF_CRITERIA sets drive graceful failure\\n  maps so every criterion always has an Evidence entry.\", \"timestamp\": \"2026-02-25T22:06:31+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"940e6568\", \"message\": \"feat(graph): implement parallel detective StateGraph (interim submission)\\n\\nGraph topology:\\n  START \\u2192 [repo_investigator \\u2016 doc_analyst]  (fan-out)\\n        \\u2192 evidence_aggregator                (fan-in)\\n        \\u2192 interim_end \\u2192 END\\n\\nFan-out: two add_edge(START, ...) calls trigger concurrent execution.\\nFan-in: evidence_aggregator receives edges from both detectives;\\n        LangGraph only runs it after both branches complete and\\n        operator.ior has merged their evidences dicts.\\n\\nEvidenceAggregator:\\n  - verifies all 7 required interim criteria are present\\n  - performs secondary report_accuracy cross-reference using repo\\n    Evidence locations available post-merge\\n  - logs a concise completeness summary\\n\\nLangSmith tracing:\\n  - build_graph() returns compiled.with_config({'run_name': ...})\\n    so every LangSmith trace is labeled 'automaton-auditor'\\n  - run_interim_audit() sets LANGCHAIN_PROJECT and passes per-run\\n    metadata (repo_url, pdf_path, submission=interim)\\n  - load_dotenv() at module level picks up .env automatically\", \"timestamp\": \"2026-02-25T22:06:31+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"7c222626\", \"message\": \"docs: finalize interim architectural report for submission\", \"timestamp\": \"2026-02-25T22:21:34+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"7bb891b1\", \"message\": \"docs: finalize README and architectural report for interim submission\\n\\n- Comprehensive README with uv setup, senior-level feature overview,\\n  and repository structure.\", \"timestamp\": \"2026-02-25T22:39:49+03:00\", \"author\": \"Abnet-Melaku1\"}], \"is_atomic\": true, \"has_progression\": true, \"log_output\": \"537a18f chore: initialise project infrastructure\\n5208b2c feat(rubric): add machine-readable rubric.json v3.0.0\\n369dfd2 feat(state): implement AgentState and Pydantic models\\n2760a1e chore(tools): add src/tools package init\\ne20058b feat(tools): implement RepoInvestigator forensic tools\\n2618d31 feat(tools): implement DocumentAuditor with RAG-lite PDF analysis\\nec5c97b chore(nodes): add src/nodes package init\\n9aa599e feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\\n940e656 feat(graph): implement parallel detective StateGraph (interim submission)\\n7c22262 docs: finalize interim architectural report for submission\\n7bb891b docs: finalize README and architectural report for interim submission\\n\", \"semantic_analysis\": {\"is_iterative\": true, \"is_atomic\": true, \"shows_progression\": true, \"rationale\": \"Commits follow a logical progression from infrastructure setup to feature implementation, with each commit focusing on a single logical change (atomic) and showing clear iterative development from foundational setup to specific feature implementation.\"}}"
       },
       {
         "criterion_id": "state_management_rigor",
         "goal": "Check Pydantic state models and reducers",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\state.py",
-        "confidence": 0.7,
-        "rationale": "Pydantic models with reducers detected.",
-        "content": "{\"found\": true, \"has_pydantic\": true, \"has_typeddict\": true, \"has_reducers\": true, \"has_evidence\": true, \"has_judicial_opinion\": true, \"is_properly_typed\": true}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src\\state.py",
+        "confidence": 0.95,
+        "rationale": "Pydantic BaseModel detected; TypedDict detected; Annotated reducers found (2 fields); Evidence model defined; JudicialOpinion model defined; Models: RubricDimension(BaseModel) at line 45, Evidence(BaseModel) at line 75, JudicialOpinion(BaseModel) at line 122, CriterionResult(BaseModel) at line 165, AuditReport(BaseModel) at line 208",
+        "content": "{\"found\": true, \"has_pydantic\": true, \"has_typeddict\": true, \"has_reducers\": true, \"has_evidence\": true, \"has_judicial_opinion\": true, \"is_properly_typed\": true, \"model_names\": [\"RubricDimension(BaseModel) at line 45\", \"Evidence(BaseModel) at line 75\", \"JudicialOpinion(BaseModel) at line 122\", \"CriterionResult(BaseModel) at line 165\", \"AuditReport(BaseModel) at line 208\", \"AgentState(TypedDict) at line 250\"], \"reducer_fields\": [\"Annotated[...] field 'evidences' at line 290\", \"Annotated[...] field 'opinions' at line 299\"], \"imports\": [\"from typing import Annotated\", \"from pydantic import BaseModel\", \"from pydantic import ConfigDict\", \"from pydantic import Field\", \"from typing_extensions import TypedDict\"]}"
       },
       {
         "criterion_id": "graph_orchestration",
         "goal": "Check LangGraph StateGraph orchestration",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\graph.py",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src\\graph.py",
         "confidence": 0.7,
         "rationale": "StateGraph detected.",
-        "content": "{\"found\": true, \"has_stategraph\": true, \"has_parallel_edges\": true, \"has_conditional_edges\": true, \"node_count\": 0, \"nodes\": [], \"edge_count\": 12}"
+        "content": "{\"found\": true, \"has_stategraph\": true, \"has_parallel_edges\": true, \"has_conditional_edges\": false, \"has_fan_out\": true, \"has_fan_in\": true, \"node_count\": 4, \"nodes\": [\"repo_investigator\", \"doc_analyst\", \"evidence_aggregator\", \"interim_end\"], \"edge_count\": 6}"
       },
       {
         "criterion_id": "graph_orchestration",
         "goal": "Check parallel fan-out/fan-in edges",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\graph.py",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src\\graph.py",
         "confidence": 0.7,
         "rationale": "Parallel edges detected.",
-        "content": "{\"found\": true, \"has_parallel_edges\": true, \"has_fan_out\": true, \"has_fan_in\": true, \"edge_count\": 12}"
+        "content": "{\"found\": true, \"has_parallel_edges\": true, \"has_fan_out\": true, \"has_fan_in\": true, \"edge_count\": 6}"
       },
       {
         "criterion_id": "safe_tool_engineering",
         "goal": "Check sandboxing and subprocess usage",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\tools",
-        "confidence": 0.7,
-        "rationale": "Sandboxing and secure subprocess usage detected.",
-        "content": "{\"found\": true, \"has_sandboxing\": true, \"has_os_system\": true, \"uses_subprocess\": true, \"security_score\": \"unsafe\"}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src\\tools",
+        "confidence": 0.9,
+        "rationale": "tempfile sandboxing detected; secure subprocess usage; no os.system() calls; src\\tools\\repo_tools.py: tempfile.TemporaryDirectory, subprocess.run() at line 308: subprocess.run(",
+        "content": "{\"found\": true, \"has_sandboxing\": true, \"has_os_system\": false, \"uses_subprocess\": true, \"security_score\": \"safe\", \"files_analyzed\": 3, \"file_details\": [{\"file\": \"src\\\\tools\\\\repo_tools.py\", \"patterns\": [\"tempfile.TemporaryDirectory\", \"subprocess.run() at line 308: subprocess.run(\", \"subprocess.run() at line 338: result = subprocess.run(\"]}]}"
       },
       {
         "criterion_id": "safe_tool_engineering",
-        "goal": "Check for security anti-patterns (os.system, eval, exec)",
+        "goal": "Check for security anti-patterns (os.system, eval, exec) via AST",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
-        "confidence": 0.5,
-        "rationale": "Security issues detected: 3",
-        "content": "{\"found\": true, \"security_issues\": [{\"file\": \"src\\\\nodes\\\\justice.py\", \"issue\": \"os.system() detected - security violation\", \"severity\": \"high\"}, {\"file\": \"src\\\\tools\\\\ast_tools.py\", \"issue\": \"os.system() detected - security violation\", \"severity\": \"high\"}, {\"file\": \"src\\\\tools\\\\ast_tools.py\", \"issue\": \"eval() or exec() detected - security violation\", \"severity\": \"high\"}], \"is_secure\": false}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
+        "confidence": 0.95,
+        "rationale": "AST analysis found 0 security anti-patterns (no os.system, eval, or exec calls in src/).",
+        "content": "{\"found\": true, \"security_issues\": [], \"is_secure\": true, \"security_score\": \"safe\"}"
       },
       {
         "criterion_id": "structured_output_enforcement",
         "goal": "Check structured output enforcement in judges",
-        "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\nodes\\judges.py",
-        "confidence": 0.7,
-        "rationale": "Structured output enforcement detected.",
-        "content": "{\"found\": true, \"has_structured_output\": true, \"has_pydantic_validation\": true, \"methods_used\": {\"with_structured_output\": true, \"bind_tools\": false}}"
+        "found": false,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src\\nodes\\judges.py",
+        "confidence": 0.4,
+        "rationale": "No structured output methods found.",
+        "content": "{\"found\": false, \"has_structured_output\": false, \"error\": \"judges.py not found (searched recursively)\"}"
       },
       {
         "criterion_id": "judicial_nuance",
         "goal": "Check judge prompt diversity and persona differentiation",
-        "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\nodes\\judges.py",
-        "confidence": 0.8,
-        "rationale": "Diverse judge prompts detected (3 distinct personas).",
-        "content": "{\"found\": true, \"judge_functions\": [\"prosecutor_node\", \"defense_node\", \"tech_lead_node\"], \"has_factory_pattern\": false, \"persona_params\": [], \"distinct_prompt_count\": 18, \"has_diverse_prompts\": true, \"persona_analysis\": {\"prosecutor\": {\"keyword_hits\": 6, \"keywords_matched\": [\"prosecutor\", \"flaw\", \"violation\", \"security\", \"gap\", \"missing\"]}, \"defense\": {\"keyword_hits\": 2, \"keywords_matched\": [\"defense\", \"credit\"]}, \"tech_lead\": {\"keyword_hits\": 8, \"keywords_matched\": [\"tech lead\", \"techlead\", \"pragmatic\", \"engineering\", \"architecture\", \"implementation\", \"practical\", \"maintainab\"]}}, \"distinct_personas_detected\": 3}"
+        "found": false,
+        "location": "not_found",
+        "confidence": 0.2,
+        "rationale": "judges.py not found. judges.py not found (searched recursively)",
+        "content": "{\"found\": false, \"has_diverse_prompts\": false, \"error\": \"judges.py not found (searched recursively)\"}"
       },
       {
         "criterion_id": "chief_justice_synthesis",
         "goal": "Check deterministic synthesis rules in Chief Justice",
-        "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src\\nodes\\justice.py",
-        "confidence": 0.9,
-        "rationale": "Deterministic synthesis with 4 active rules detected.",
-        "content": "{\"found\": true, \"synthesis_functions\": [\"chief_justice_node\", \"_synthesize_score\"], \"has_conditional_logic\": true, \"max_conditional_depth\": 4, \"has_min_max\": true, \"has_round\": true, \"has_weighted_calc\": true, \"has_llm_call\": false, \"rules_detected\": {\"security_override\": {\"detected\": true, \"keywords_matched\": [\"security\", \"cap\", \"override\", \"safe_tool\"]}, \"variance_handling\": {\"detected\": true, \"keywords_matched\": [\"variance\", \"disagreement\", \"dissent\"]}, \"weighted_average\": {\"detected\": true, \"keywords_matched\": [\"weight\", \"weighted\", \"0.4\", \"0.3\"]}, \"fact_supremacy\": {\"detected\": true, \"keywords_matched\": [\"evidence\", \"fact\", \"confidence\", \"supremacy\"]}}, \"active_rule_count\": 4, \"has_synthesis_rules\": true, \"uses_llm\": false, \"is_deterministic\": true}"
+        "found": false,
+        "location": "not_found",
+        "confidence": 0.2,
+        "rationale": "justice.py not found. justice.py / synthesis.py not found (searched recursively)",
+        "content": "{\"found\": false, \"has_synthesis_rules\": false, \"is_deterministic\": false, \"error\": \"justice.py / synthesis.py not found (searched recursively)\"}"
       },
       {
         "criterion_id": "general_repo_health",
         "goal": "Check for README.md file and assess quality",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\README.md",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\README.md",
         "confidence": 0.9,
-        "rationale": "README found with 4 sections. Quality score: 1.00",
-        "content": "{\"found\": true, \"has_readme\": true, \"quality_score\": 1.0, \"sections\": [\"installation\", \"usage\", \"license\", \"description\"], \"word_count\": 808, \"file_path\": \"README.md\"}"
+        "rationale": "README found with 0 sections. Quality score: 0.50",
+        "content": "{\"found\": true, \"has_readme\": true, \"quality_score\": 0.5, \"sections\": [], \"word_count\": 683, \"file_path\": \"README.md\"}"
       },
       {
         "criterion_id": "general_repo_health",
         "goal": "Check for .gitignore file and assess coverage",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\.gitignore",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\.gitignore",
         "confidence": 0.8,
-        "rationale": ".gitignore found with 19 patterns. Coverage: 0.80",
-        "content": "{\"found\": true, \"has_gitignore\": true, \"coverage_score\": 0.8, \"patterns\": [\"doc.md\", \".env\", \"__pycache__/\", \"*.py[cod]\", \"*$py.class\", \"*.so\", \".Python\", \"*.egg-info/\", \"dist/\", \"build/\", \".venv/\", \"venv/\", \"env/\", \".vscode/\", \".idea/\", \"*.swp\", \"*.swo\", \".DS_Store\", \"Thumbs.db\"], \"important_patterns_found\": [\"\\\\.env\", \"__pycache__\", \"\\\\.venv\", \"venv/\", \"\\\\.idea\", \"\\\\.vscode\", \"dist/\", \"build/\"], \"total_patterns\": 19}"
+        "rationale": ".gitignore found with 30 patterns. Coverage: 0.80",
+        "content": "{\"found\": true, \"has_gitignore\": true, \"coverage_score\": 0.8, \"patterns\": [\".env\", \"*.pem\", \"*.key\", \"__pycache__/\", \"*.py[cod]\", \"*.pyo\", \"*.pyd\", \"*.so\", \"*.egg\", \"*.egg-info/\", \"dist/\", \"build/\", \".eggs/\", \".venv/\", \"venv/\", \"env/\", \"uv.lock\", \".pytest_cache/\", \".coverage\", \"htmlcov/\", \"coverage.xml\", \".mypy_cache/\", \".ruff_cache/\", \".vscode/\", \".idea/\", \"*.swp\", \"*.swo\", \".DS_Store\", \"Thumbs.db\", \"/tmp/\"], \"important_patterns_found\": [\"\\\\.env\", \"__pycache__\", \"\\\\.venv\", \"venv/\", \"\\\\.idea\", \"\\\\.vscode\", \"dist/\", \"build/\"], \"total_patterns\": 30}"
       },
       {
         "criterion_id": "general_repo_health",
@@ -161,70 +161,70 @@
         "criterion_id": "general_repo_health",
         "goal": "Check git commit message standards",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo",
-        "confidence": 0.8,
-        "rationale": "Commit quality score: 0.80. 16/20 commits follow standards",
-        "content": "{\"found\": true, \"total_commits_analyzed\": 20, \"good_commits\": 16, \"quality_score\": 0.8, \"issues\": [\"Very long message: docs: update README.md with in...\", \"Very long message: feat: implement graph.py with ...\", \"Very long message: feat: implement detectives.py ...\", \"Very long message: feat: add wrapper modules repo...\"], \"sample_commits\": [\"ff497d0 fix: remove confidence validation ambiguity in Evidence model\", \"ce1c3b2 feat: enhance n with comprehensive evidence output\", \"3ee2a25 feat: implement production-grade improvements\", \"7b3de67 fix(security): clarify API key placeholders in documentation\", \"648c7c4 ci: add GitHub Actions workflows for CI/CD and testing\"]}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo",
+        "confidence": 0.9090909090909091,
+        "rationale": "Commit quality score: 0.91. 10/11 commits follow standards",
+        "content": "{\"found\": true, \"total_commits_analyzed\": 11, \"good_commits\": 10, \"quality_score\": 0.9090909090909091, \"issues\": [\"Very long message: feat(graph): implement paralle...\"], \"sample_commits\": [\"7bb891b docs: finalize README and architectural report for interim submission\", \"7c22262 docs: finalize interim architectural report for submission\", \"940e656 feat(graph): implement parallel detective StateGraph (interim submission)\", \"9aa599e feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\", \"ec5c97b chore(nodes): add src/nodes package init\"]}"
       },
       {
         "criterion_id": "general_repo_health",
         "goal": "Check basic project structure and organization",
-        "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo",
-        "confidence": 0.75,
-        "rationale": "Organization score: 0.75. Structure checks: 3/4",
-        "content": "{\"found\": true, \"structure_checks\": {\"has_src_directory\": true, \"has_tests_directory\": true, \"has_docs_directory\": false, \"has_config_file\": true}, \"organization_score\": 0.75}"
+        "found": false,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo",
+        "confidence": 0.5,
+        "rationale": "Organization score: 0.50. Structure checks: 2/4",
+        "content": "{\"found\": true, \"structure_checks\": {\"has_src_directory\": true, \"has_tests_directory\": false, \"has_docs_directory\": false, \"has_config_file\": true}, \"organization_score\": 0.5}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Analyze code complexity metrics",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
         "confidence": 0.5,
-        "rationale": "Average complexity: 4.57. 6 files with high complexity.",
-        "content": "{\"files_analyzed\": 15, \"high_complexity_files\": [{\"file\": \"src\\\\graph.py\", \"complexity\": 56}, {\"file\": \"src\\\\state.py\", \"complexity\": 47}, {\"file\": \"src\\\\nodes\\\\detectives.py\", \"complexity\": 41}, {\"file\": \"src\\\\nodes\\\\justice.py\", \"complexity\": 43}, {\"file\": \"src\\\\tools\\\\ast_tools.py\", \"complexity\": 86}, {\"file\": \"src\\\\tools\\\\pdf_tools.py\", \"complexity\": 27}], \"max_complexity\": 17, \"average_complexity\": 4.571428571428571, \"total_functions\": 91, \"has_high_complexity\": true}"
+        "rationale": "Average complexity: 3.02. 2 files with high complexity.",
+        "content": "{\"files_analyzed\": 8, \"high_complexity_files\": [{\"file\": \"src\\\\tools\\\\doc_tools.py\", \"complexity\": 21}, {\"file\": \"src\\\\tools\\\\repo_tools.py\", \"complexity\": 72}], \"max_complexity\": 11, \"average_complexity\": 3.0172413793103448, \"total_functions\": 58, \"has_high_complexity\": true}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check docstring coverage",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
         "confidence": 0.7,
-        "rationale": "Function docstring coverage: 76.9%. 70/91 functions documented.",
-        "content": "{\"total_functions\": 91, \"functions_with_docstrings\": 70, \"total_classes\": 32, \"classes_with_docstrings\": 32, \"files_analyzed\": 15, \"low_coverage_files\": [{\"file\": \"src\\\\exceptions.py\", \"function_coverage\": 0.0, \"functions\": 16, \"with_docs\": 0}], \"function_coverage\": 0.7692307692307693, \"class_coverage\": 1.0}"
+        "rationale": "Function docstring coverage: 77.6%. 45/58 functions documented.",
+        "content": "{\"total_functions\": 58, \"functions_with_docstrings\": 45, \"total_classes\": 27, \"classes_with_docstrings\": 27, \"files_analyzed\": 8, \"low_coverage_files\": [], \"function_coverage\": 0.7758620689655172, \"class_coverage\": 1.0}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check type hint coverage",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
         "confidence": 0.7,
-        "rationale": "Type hint coverage: 79.1%. 72/91 functions have type hints.",
-        "content": "{\"total_functions\": 91, \"functions_with_type_hints\": 72, \"files_analyzed\": 15, \"low_coverage_files\": [], \"type_hint_coverage\": 0.7912087912087912}"
+        "rationale": "Type hint coverage: 100.0%. 58/58 functions have type hints.",
+        "content": "{\"total_functions\": 58, \"functions_with_type_hints\": 58, \"files_analyzed\": 8, \"low_coverage_files\": [], \"type_hint_coverage\": 1.0}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check error handling quality",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
-        "confidence": 0.4,
-        "rationale": "Error handling coverage: 23.1%. Bare excepts: 1. Specific exceptions: 26",
-        "content": "{\"total_functions\": 91, \"functions_with_error_handling\": 21, \"bare_excepts\": 1, \"specific_exceptions\": 26, \"files_analyzed\": 15, \"poor_error_handling_files\": [{\"file\": \"src\\\\config.py\", \"handling_coverage\": 0.0, \"bare_excepts\": 0, \"functions\": 4}, {\"file\": \"src\\\\exceptions.py\", \"handling_coverage\": 0.0, \"bare_excepts\": 0, \"functions\": 16}, {\"file\": \"src\\\\graph.py\", \"handling_coverage\": 0.25, \"bare_excepts\": 0, \"functions\": 8}, {\"file\": \"src\\\\state.py\", \"handling_coverage\": 0.0, \"bare_excepts\": 0, \"functions\": 14}, {\"file\": \"src\\\\nodes\\\\justice.py\", \"handling_coverage\": 0.0, \"bare_excepts\": 0, \"functions\": 6}, {\"file\": \"src\\\\tools\\\\ast_tools.py\", \"handling_coverage\": 0.2692307692307692, \"bare_excepts\": 1, \"functions\": 26}], \"error_handling_coverage\": 0.23076923076923078}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
+        "confidence": 0.8,
+        "rationale": "Error handling coverage: 29.3%. Bare excepts: 0. Specific exceptions: 20",
+        "content": "{\"total_functions\": 58, \"functions_with_error_handling\": 17, \"bare_excepts\": 0, \"specific_exceptions\": 20, \"files_analyzed\": 8, \"poor_error_handling_files\": [{\"file\": \"src\\\\graph.py\", \"handling_coverage\": 0.14285714285714285, \"bare_excepts\": 0, \"functions\": 7}, {\"file\": \"src\\\\tools\\\\doc_tools.py\", \"handling_coverage\": 0.25, \"bare_excepts\": 0, \"functions\": 16}], \"error_handling_coverage\": 0.29310344827586204}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check test coverage indicators",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo",
-        "confidence": 0.8,
-        "rationale": "Test files: 6. Coverage config: True. Uses pytest: True",
-        "content": "{\"has_test_directory\": true, \"test_file_count\": 6, \"has_coverage_config\": true, \"uses_pytest\": true, \"uses_unittest\": false, \"test_files\": [\"tests\\\\unit\\\\test_ast_tools.py\", \"tests\\\\unit\\\\test_git_tools.py\", \"tests\\\\unit\\\\test_state.py\", \"tests\\\\unit\\\\test_ast_tools.py\", \"tests\\\\unit\\\\test_git_tools.py\", \"tests\\\\unit\\\\test_state.py\"]}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo",
+        "confidence": 0.3,
+        "rationale": "Test files: 0. Coverage config: True. Uses pytest: False",
+        "content": "{\"has_test_directory\": false, \"test_file_count\": 0, \"has_coverage_config\": true, \"uses_pytest\": false, \"uses_unittest\": false, \"test_files\": []}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check dependency management",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo",
         "confidence": 0.7,
         "rationale": "Dependency files: 1. Pinned dependencies: False",
         "content": "{\"has_dependency_file\": true, \"dependency_files\": {\"pyproject.toml\": true}, \"pinned_dependencies\": false}"
@@ -233,19 +233,19 @@
         "criterion_id": "code_quality",
         "goal": "Check for code duplication indicators",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
         "confidence": 0.5,
-        "rationale": "Potential duplicates: 8. Functions with same signature found in multiple files.",
-        "content": "{\"potential_duplicates\": 8, \"duplicate_indicators\": [{\"signature\": \"__init__(3 params)\", \"files\": [\"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\", \"src\\\\exceptions.py\"], \"count\": 14}, {\"signature\": \"__init__(2 params)\", \"files\": [\"src\\\\exceptions.py\", \"src\\\\exceptions.py\"], \"count\": 2}, {\"signature\": \"validate_criterion_id(2 params)\", \"files\": [\"src\\\\state.py\", \"src\\\\state.py\"], \"count\": 2}, {\"signature\": \"__init__(1 params)\", \"files\": [\"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\"], \"count\": 5}, {\"signature\": \"visit_ImportFrom(2 params)\", \"files\": [\"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\"], \"count\": 3}, {\"signature\": \"visit_Call(2 params)\", \"files\": [\"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\"], \"count\": 4}, {\"signature\": \"_extract_name(2 params)\", \"files\": [\"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\"], \"count\": 2}, {\"signature\": \"get_results(1 params)\", \"files\": [\"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\", \"src\\\\tools\\\\ast_tools.py\"], \"count\": 3}]}"
+        "rationale": "Potential duplicates: 1. Functions with same signature found in multiple files.",
+        "content": "{\"potential_duplicates\": 1, \"duplicate_indicators\": [{\"signature\": \"__init__(1 params)\", \"files\": [\"src\\\\tools\\\\doc_tools.py\", \"src\\\\tools\\\\repo_tools.py\"], \"count\": 2}]}"
       },
       {
         "criterion_id": "code_quality",
         "goal": "Check import organization",
         "found": true,
-        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_zn5f4z0t\\repo\\src",
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_3e3_qblt\\repo\\src",
         "confidence": 0.4,
-        "rationale": "Import organization score: 0.27. Wildcard imports: 0 files",
-        "content": "{\"files_analyzed\": 11, \"files_with_organized_imports\": 3, \"files_with_wildcard_imports\": 0, \"files_with_unused_imports_indicators\": 0, \"import_organization_score\": 0.2727272727272727}"
+        "rationale": "Import organization score: 0.20. Wildcard imports: 0 files",
+        "content": "{\"files_analyzed\": 5, \"files_with_organized_imports\": 1, \"files_with_wildcard_imports\": 0, \"files_with_unused_imports_indicators\": 0, \"import_organization_score\": 0.2}"
       }
     ],
     "vision": [
@@ -253,57 +253,39 @@
         "criterion_id": "swarm_visual",
         "goal": "Extract and classify architectural diagrams using Gemini multimodal analysis",
         "found": true,
-        "location": "reports\\interim_report.pdf",
-        "confidence": 0.78,
-        "rationale": "Found 3 images in PDF. Gemini classification: System Architecture Diagram diagram. Based on common report content, this is a high-level component diagram showing logical layers and service interactions, typical for system architectur",
-        "content": "{\n  \"images_found\": 3,\n  \"classification\": {\n    \"diagram_type\": \"System Architecture Diagram\",\n    \"is_architectural\": true,\n    \"quality_score\": 0.7,\n    \"key_elements\": [\n      \"Client Layer\",\n      \"Application Server\",\n      \"Database\",\n      \"External API\",\n      \"Load Balancer\",\n      \"Cloud Storage\"\n    ],\n    \"rationale\": \"Based on common report content, this is a high-level component diagram showing logical layers and service interactions, typical for system architecture overviews.\"\n  }\n}"
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_ecut_czi\\repo\\reports\\interim_report.md",
+        "confidence": 0.8400000000000001,
+        "rationale": "Found 2 diagram/image artifacts in report. Gemini classification: System Architecture Diagram diagram. The diagram shows a layered component-based architecture with clear separation between frontend, backend, and data layers, including external service ",
+        "content": "{\"images_found\": 2, \"classification\": {\"diagram_type\": \"System Architecture Diagram\", \"is_architectural\": true, \"quality_score\": 0.85, \"key_elements\": [\"Components\", \"Layers\", \"Services\", \"Data Stores\", \"External Systems\", \"Connections/Flows\"], \"rationale\": \"The diagram shows a layered component-based architecture with clear separation between frontend, backend, and data layers, including external service integrations and data flow relationships.\"}}"
       }
     ],
     "cross_ref": [
       {
         "criterion_id": "report_accuracy",
-        "goal": "HALLUCINATION: Report claims 'graph.py' exists",
+        "goal": "HALLUCINATION: Report claims 'justice.py' exists",
         "found": false,
-        "location": "cross_ref:graph.py",
-        "confidence": 0.9,
-        "rationale": "Filename 'graph.py' not found in repo evidence. Known files: ['C']",
-        "content": "graph.py"
+        "location": "cross_ref:justice.py",
+        "confidence": 0.85,
+        "rationale": "Filename 'justice.py' not found in repo. Verified against 37 known files.",
+        "content": "justice.py"
       },
       {
         "criterion_id": "report_accuracy",
-        "goal": "HALLUCINATION: Report claims 'judges.py' exists",
+        "goal": "HALLUCINATION: Report claims 'src/nodes/justice.py' exists",
         "found": false,
-        "location": "cross_ref:judges.py",
-        "confidence": 0.9,
-        "rationale": "Filename 'judges.py' not found in repo evidence. Known files: ['C']",
-        "content": "judges.py"
-      },
-      {
-        "criterion_id": "report_accuracy",
-        "goal": "HALLUCINATION: Report claims 'src/tools/ast_tools.py' exists",
-        "found": false,
-        "location": "cross_ref:src/tools/ast_tools.py",
-        "confidence": 0.9,
-        "rationale": "Filename 'ast_tools.py' not found in repo evidence. Known files: ['C']",
-        "content": "src/tools/ast_tools.py"
-      },
-      {
-        "criterion_id": "report_accuracy",
-        "goal": "HALLUCINATION: Report claims 'tools/git.py' exists",
-        "found": false,
-        "location": "cross_ref:tools/git.py",
-        "confidence": 0.9,
-        "rationale": "Filename 'git.py' not found in repo evidence. Known files: ['C']",
-        "content": "tools/git.py"
+        "location": "cross_ref:src/nodes/justice.py",
+        "confidence": 0.85,
+        "rationale": "Filename 'justice.py' not found in repo. Verified against 37 known files.",
+        "content": "src/nodes/justice.py"
       },
       {
         "criterion_id": "report_accuracy",
         "goal": "Cross-reference summary",
         "found": true,
         "location": "cross_ref:summary",
-        "confidence": 0.95,
-        "rationale": "Found 4 file paths in the PDF report that do not match any files found by the repo detective.",
-        "content": "4 hallucinated paths detected"
+        "confidence": 0.9,
+        "rationale": "Found 2 file paths in the PDF report that do not match any of 37 files in the repo (verified via filesystem scan).",
+        "content": "{\"hallucinated_count\": 2, \"total_known_files\": 37, \"verification_method\": \"filesystem scan\"}"
       }
     ]
   }

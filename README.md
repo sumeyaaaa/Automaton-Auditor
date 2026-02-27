@@ -59,11 +59,15 @@ pip install -e .
 
 3. Configure environment variables:
    - Copy `.env.example` to `.env` (if not blocked by gitignore)
-   - Set your API keys:
-     - `OPENAI_API_KEY`: For LLM models (GPT-4o)
-     - `GOOGLE_API_KEY`: For vision models (Gemini Pro Vision, optional)
+   - Set your API keys (at minimum, you need one LLM provider):
+     - `DEEPSEEK_API_KEY`: For DeepSeek models (default, recommended for cost efficiency)
+     - `OPENAI_API_KEY`: For OpenAI models (GPT-4o, optional)
+     - `XAI_API_KEY`: For xAI/Grok models (optional)
+     - `GROQ_API_KEY`: For Groq/Llama models (optional)
+     - `GOOGLE_API_KEY`: For Google Gemini models (optional)
      - `LANGCHAIN_API_KEY`: For LangSmith tracing (optional but recommended)
      - `LANGCHAIN_TRACING_V2=true`: Enable tracing
+     - `LANGCHAIN_PROJECT=automaton-auditor`: LangSmith project name
 
 ## Usage
 
@@ -109,7 +113,7 @@ from src.graph import run_interim_audit
 final_state = run_interim_audit(
     repo_url="https://github.com/user/repo.git",
     pdf_path="reports/submission.pdf",
-    rubric_path=Path("rubric.json"),
+    rubric_path=Path("rubric/week2_rubric.json"),
     output_path=Path("audit/interim_evidence.json")
 )
 
@@ -123,17 +127,18 @@ print(f"Collected evidence from {len(evidences)} sources")
 from pathlib import Path
 from src.graph import run_audit
 
-# Run complete audit
+# Run complete audit (self-audit by default)
 final_state = run_audit(
     repo_url="https://github.com/user/repo.git",
     pdf_path="reports/submission.pdf",
-    rubric_path=Path("rubric.json"),
-    output_path=Path("audit/report_generated/audit_report.md")
+    rubric_path=Path("rubric/week2_rubric.json"),
+    audit_type="onself"  # Options: "onself", "onpeer", "bypeer"
 )
 
 # Access final report
 report = final_state["final_report"]
-print(f"Overall Score: {report.overall_score}/5.0")
+print(f"Report length: {len(report)} characters")
+# The report is a Markdown string saved to the audit directory
 ```
 
 ## Project Structure
@@ -153,7 +158,13 @@ Automaton-Auditor/
 │       ├── detectives.py    # RepoInvestigator, DocAnalyst, VisionInspector
 │       ├── judges.py         # Prosecutor, Defense, TechLead
 │       └── justice.py        # ChiefJustice synthesis engine
-├── rubric.json               # Machine-readable evaluation rubric
+├── rubric/
+│   └── week2_rubric.json     # Machine-readable evaluation rubric
+├── audit/
+│   ├── report_bypeer_received/      # Reports peer generated about YOUR code
+│   ├── report_onpeer_generated/     # Reports YOUR agent generated about peer's code
+│   ├── report_onself_generated/     # Reports YOUR agent generated about YOUR OWN code
+│   └── langsmith_logs/              # Trace exports
 ├── pyproject.toml            # Project dependencies
 ├── README.md                 # This file
 └── doc.md                    # Complete project specification
@@ -210,7 +221,10 @@ The auditor generates a structured Markdown report containing:
   - Specific remediation instructions
 - **Comprehensive Remediation Plan**: Prioritized action items
 
-Reports are saved to `audit/report_generated/audit_report.md` by default.
+Reports are saved to the appropriate directory based on audit type:
+- Self-audit: `audit/report_onself_generated/{owner}/{repo}/audit_report.md`
+- Peer audit: `audit/report_onpeer_generated/{owner}/{repo}/audit_report.md`
+- Received peer audit: `audit/report_bypeer_received/{owner}/{repo}/audit_report.md`
 
 ## Development
 

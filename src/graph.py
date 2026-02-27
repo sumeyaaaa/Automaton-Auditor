@@ -82,7 +82,7 @@ def context_builder_node(state: AgentState) -> dict:
 
     Runs at: Superstep 1 (before any detective)
     """
-    rubric_path = Path(state.get("rubric_path", "rubric.json"))
+    rubric_path = Path(state.get("rubric_path", "rubric/week2_rubric.json"))
     rubric = load_rubric(rubric_path)
 
     return {
@@ -215,7 +215,7 @@ def create_auditor_graph() -> StateGraph:
 def run_interim_audit(
     repo_url: str,
     pdf_path: str,
-    rubric_path: str = "rubric.json",
+    rubric_path: str = "rubric/week2_rubric.json",
     output_path: Path = Path("audit/interim_evidence.json"),
 ) -> dict:
     """Run the interim audit — detectives only, no judges.
@@ -271,16 +271,18 @@ def run_interim_audit(
 def run_audit(
     repo_url: str,
     pdf_path: str,
-    rubric_path: str = "rubric.json",
-    output_path: Path = Path("audit/report_generated/audit_report.md"),
+    rubric_path: str = "rubric/week2_rubric.json",
+    output_path: Path = None,
+    audit_type: str = "onself",  # "onself", "onpeer", or "bypeer"
 ) -> dict:
     """Run the complete audit — detectives + judges + synthesis.
 
     Args:
         repo_url: GitHub repository URL to audit
         pdf_path: Path to the PDF report
-        rubric_path: Path to rubric JSON
-        output_path: Where to save the final Markdown report
+        rubric_path: Path to rubric JSON (default: "rubric/week2_rubric.json")
+        output_path: Where to save the final Markdown report (if None, auto-generated)
+        audit_type: Type of audit - "onself" (default), "onpeer", or "bypeer"
 
     Returns:
         Final state dictionary with audit report
@@ -308,18 +310,26 @@ def run_audit(
             f"Failed to execute audit: {e}",
         ) from e
 
+    # Determine output directory based on audit_type
+    if audit_type == "onself":
+        base_dir = Path("audit/report_onself_generated")
+    elif audit_type == "onpeer":
+        base_dir = Path("audit/report_onpeer_generated")
+    elif audit_type == "bypeer":
+        base_dir = Path("audit/report_bypeer_received")
+    else:
+        # Default to onself if invalid type
+        base_dir = Path("audit/report_onself_generated")
+
     # Derive a per-owner/per-repo output path when using the default.
     #
     # This ensures:
     # - Different repositories never overwrite each other's reports.
     # - The same repository can be re-audited and its report updated in-place.
-    default_base = Path("audit/report_generated/audit_report.md")
-    if output_path == default_base:
+    if output_path is None:
         owner, name = _parse_repo_owner_and_name(repo_url)
         if owner and name:
-            output_path = (
-                Path("audit") / "report_generated" / owner / name / "audit_report.md"
-            )
+            output_path = base_dir / owner / name / "audit_report.md"
         else:
             # Fallback: safe slug from the URL itself.
             safe_slug = (
@@ -328,9 +338,7 @@ def run_audit(
                 .replace(":", "_")
                 .replace("\\", "_")
             )
-            output_path = (
-                Path("audit") / "report_generated" / safe_slug / "audit_report.md"
-            )
+            output_path = base_dir / safe_slug / "audit_report.md"
 
     # Save report
     report = final_state.get("final_report", "")
