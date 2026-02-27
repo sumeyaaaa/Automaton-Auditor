@@ -19,19 +19,16 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY uv.lock* ./
 
-# Install dependencies using uv
+# Copy application code first (for better layer caching)
+COPY . .
+
+# Install dependencies and package using uv
 # Use --frozen only if uv.lock exists, otherwise generate it
 RUN if [ -f uv.lock ]; then \
         uv sync --frozen --no-dev; \
     else \
         uv sync --no-dev; \
     fi
-
-# Copy application code
-COPY . .
-
-# Install the package in editable mode
-RUN uv pip install -e .
 
 # Set Python path
 ENV PYTHONPATH=/app
