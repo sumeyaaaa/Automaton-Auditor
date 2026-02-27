@@ -241,6 +241,70 @@ black src/
 ruff check src/
 ```
 
+## Docker
+
+### Building the Image
+
+```bash
+docker build -t automaton-auditor .
+```
+
+### Running with Docker
+
+#### Interim Audit (Detectives Only)
+```bash
+docker run --rm \
+  -v $(pwd)/audit:/app/audit \
+  -v $(pwd)/rubric:/app/rubric \
+  -v $(pwd)/reports:/app/reports \
+  -e DEEPSEEK_API_KEY=your_key_here \
+  automaton-auditor \
+  https://github.com/user/repo.git reports/submission.pdf --interim
+```
+
+#### Complete Audit
+```bash
+docker run --rm \
+  -v $(pwd)/audit:/app/audit \
+  -v $(pwd)/rubric:/app/rubric \
+  -v $(pwd)/reports:/app/reports \
+  -e DEEPSEEK_API_KEY=your_key_here \
+  -e LANGCHAIN_API_KEY=your_key_here \
+  -e LANGCHAIN_TRACING_V2=true \
+  automaton-auditor \
+  https://github.com/user/repo.git reports/submission.pdf
+```
+
+**Note:** On Windows PowerShell, use `${PWD}` instead of `$(pwd)`:
+```powershell
+docker run --rm `
+  -v ${PWD}/audit:/app/audit `
+  -v ${PWD}/rubric:/app/rubric `
+  -v ${PWD}/reports:/app/reports `
+  -e DEEPSEEK_API_KEY=your_key_here `
+  automaton-auditor `
+  https://github.com/user/repo.git reports/submission.pdf
+```
+
+### Docker Compose (Optional)
+
+Create a `docker-compose.yml` for easier management:
+```yaml
+version: '3.8'
+services:
+  auditor:
+    build: .
+    volumes:
+      - ./audit:/app/audit
+      - ./rubric:/app/rubric
+      - ./reports:/app/reports
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_TRACING_V2=true
+    command: ["https://github.com/user/repo.git", "reports/submission.pdf"]
+```
+
 ## License
 
 [Specify your license here]
