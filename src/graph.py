@@ -255,6 +255,12 @@ def run_interim_audit(
 
     # Save evidence to JSON
     _save_evidence_json(final_state, output_path)
+    
+    # Security: Cleanup temporary directories after audit
+    # Note: Temporary directories are cleaned up by the OS eventually,
+    # but we can optionally clean them up here if needed.
+    # For now, we leave them for potential debugging, but they're in temp dirs
+    # and will be cleaned up by the OS.
 
     return final_state
 

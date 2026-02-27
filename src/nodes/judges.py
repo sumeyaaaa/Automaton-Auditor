@@ -153,11 +153,92 @@ def _format_evidence_summary(evidence_list: List[Evidence]) -> str:
     return "\n---\n".join(parts)
 
 
+def _get_criterion_specific_guidance(persona: str, dimension_id: str) -> str:
+    """Get criterion-specific scoring guidance based on dimension_id.
+    
+    This prevents judges from applying irrelevant checks (e.g., security checks
+    to state_management_rigor, which should only check for Pydantic models).
+    """
+    base_guidance = PERSONA_CONFIG[persona]["scoring_guidance"]
+    
+    # Criterion-specific overrides
+    if dimension_id == "state_management_rigor":
+        if persona == "Prosecutor":
+            return (
+                "Judicial Sentencing Guidelines for State Management:\n"
+                "- Check ONLY for Pydantic BaseModel classes and TypedDict with Annotated reducers\n"
+                "- Security sandboxing belongs in tool files (src/tools/), NOT in state.py\n"
+                "- Parallel orchestration belongs in graph.py, NOT in state.py\n"
+                "- If Pydantic models are missing: Score 1\n"
+                "- If reducers (operator.ior, operator.add) are missing: Score 1\n"
+                "- If evidence is missing or confidence is low: Score 1-2"
+            )
+        elif persona == "Defense":
+            return (
+                "Judicial Sentencing Guidelines for State Management:\n"
+                "- Reward proper Pydantic models and TypedDict usage\n"
+                "- Recognize that state.py defines data contracts, not security/orchestration\n"
+                "- If reducers show understanding of parallel execution: Reward with higher score\n"
+                "- If architecture is sound: Focus on what's present"
+            )
+        else:  # TechLead
+            return (
+                "Judicial Sentencing Guidelines for State Management:\n"
+                "- Evaluate if Pydantic models are properly typed and validated\n"
+                "- Check if reducers correctly support parallel execution\n"
+                "- State.py should define data contracts, not security/orchestration logic\n"
+                "- If structure is sound: Score 3-4"
+            )
+    
+    elif dimension_id == "graph_orchestration":
+        if persona == "Prosecutor":
+            return (
+                "Judicial Sentencing Guidelines for Graph Orchestration:\n"
+                "- If evidence shows linear flow instead of parallel orchestration: Score 1\n"
+                "- If parallel fan-out/fan-in patterns are missing: Score 1\n"
+                "- If synchronization nodes (EvidenceAggregator) are missing: Score 1\n"
+                "- If conditional edges for error handling are missing: Score 2\n"
+                "- If evidence is missing or confidence is low: Score 1-2"
+            )
+        else:
+            return base_guidance  # Use default for other personas
+    
+    elif dimension_id == "safe_tool_engineering":
+        if persona == "Prosecutor":
+            return (
+                "Judicial Sentencing Guidelines for Safe Tool Engineering:\n"
+                "- If security sandboxing (tempfile.TemporaryDirectory) is absent: Score 1 (Security Negligence)\n"
+                "- If os.system() is used instead of subprocess.run(..., shell=False): Score 1\n"
+                "- If input validation is missing: Score 1-2\n"
+                "- If error handling is missing: Score 2\n"
+                "- If evidence is missing or confidence is low: Score 1-2"
+            )
+        else:
+            return base_guidance
+    
+    elif dimension_id == "structured_output_enforcement":
+        if persona == "Prosecutor":
+            return (
+                "Judicial Sentencing Guidelines for Structured Output:\n"
+                "- If .with_structured_output() or .bind_tools() is missing: Score 2 max\n"
+                "- If Pydantic validation is missing: Score 1\n"
+                "- If error handling for structured output failures is missing: Score 2\n"
+                "- If evidence is missing or confidence is low: Score 1-2"
+            )
+        else:
+            return base_guidance
+    
+    # Default: use base guidance for other criteria
+    return base_guidance
+
+
 def _build_system_prompt(
     persona: str, dimension_name: str, dimension_id: str, evidence_text: str
 ) -> str:
     """Assemble the system prompt from persona config + evidence."""
     cfg = PERSONA_CONFIG[persona]
+    criterion_guidance = _get_criterion_specific_guidance(persona, dimension_id)
+    
     return (
         f"You are The {persona} in a Digital Courtroom.\n"
         f"Your core philosophy: {cfg['philosophy']}\n\n"
@@ -165,13 +246,16 @@ def _build_system_prompt(
         f"You are evaluating: {dimension_name}\n"
         f"Criterion ID: {dimension_id}\n\n"
         f"Evidence collected:\n{evidence_text}\n\n"
-        f"{cfg['scoring_guidance']}\n\n"
+        f"{criterion_guidance}\n\n"
         "CRITICAL: Your argument MUST cite specific evidence:\n"
         "- Include exact file paths and line numbers (e.g., 'src/graph.py:157')\n"
         "- Quote code snippets when relevant (use the Content field from evidence)\n"
         "- Reference specific locations from the evidence Location field\n"
         "- Be concise: 2-3 sentences maximum, no repetition\n"
-        "- Focus on concrete findings, not generic observations\n\n"
+        "- Focus on concrete findings, not generic observations\n"
+        "- IMPORTANT: Only evaluate what's relevant to this criterion. "
+        "Security belongs in tool files, orchestration belongs in graph.py, "
+        "and state.py is for data models only.\n\n"
         f"{cfg['evaluation_focus']}"
     )
 

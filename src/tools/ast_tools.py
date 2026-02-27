@@ -480,15 +480,26 @@ class StateGraphAnalyzer(ast.NodeVisitor):
         self.edge_patterns = []
 
     def visit_ImportFrom(self, node):
-        if node.module == "langgraph.graph" or node.module == "langgraph":
+        # Catch all common LangGraph import patterns:
+        #   from langgraph.graph import StateGraph
+        #   from langgraph.graph.state import StateGraph
+        #   from langgraph import StateGraph
+        if node.module and ("langgraph" in node.module):
             for alias in node.names:
-                if alias.name == "StateGraph":
+                if alias.name == "StateGraph" or alias.name == "END" or alias.name == "START":
                     self.has_stategraph = True
         self.generic_visit(node)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
-            if node.func.attr == "add_edge":
+            if node.func.attr == "add_node":
+                # Catches: builder.add_node("name", func)
+                # Works for both bare Expr and Assign contexts
+                if len(node.args) >= 1:
+                    node_name = self._extract_name(node.args[0])
+                    if node_name:
+                        self.node_names.append(node_name)
+            elif node.func.attr == "add_edge":
                 self.has_parallel_edges = True
                 if len(node.args) >= 2:
                     self.edge_patterns.append({
@@ -499,16 +510,6 @@ class StateGraphAnalyzer(ast.NodeVisitor):
                 self.has_conditional_edges = True
         self.generic_visit(node)
 
-    def visit_Assign(self, node):
-        if isinstance(node.value, ast.Call):
-            if isinstance(node.value.func, ast.Attribute):
-                if node.value.func.attr == "add_node":
-                    if len(node.value.args) > 0:
-                        node_name = self._extract_name(node.value.args[0])
-                        if node_name:
-                            self.node_names.append(node_name)
-        self.generic_visit(node)
-
     def _extract_name(self, node) -> Optional[str]:
         if isinstance(node, ast.Str):
             return node.s
@@ -516,6 +517,11 @@ class StateGraphAnalyzer(ast.NodeVisitor):
             return str(node.value) if isinstance(node.value, str) else None
         elif isinstance(node, ast.Name):
             return node.id
+        elif isinstance(node, ast.List):
+            # Fan-in/fan-out: add_edge(["node1", "node2"], "target")
+            names = [self._extract_name(elt) for elt in node.elts]
+            names = [n for n in names if n]
+            return f"[{', '.join(names)}]" if names else f"[{len(node.elts)} nodes]"
         return None
 
     def get_results(self) -> Dict:

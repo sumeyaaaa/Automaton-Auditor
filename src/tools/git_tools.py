@@ -11,6 +11,7 @@ import git
 from git import Repo
 
 from src.exceptions import GitOperationError, InvalidRepositoryError, RepositoryCloneError
+from src.tools.security_utils import validate_repo_url, sanitize_path
 
 
 def safe_clone(repo_url: str, timeout: int = 60, shallow: bool = False) -> tuple[Path, str]:
@@ -32,11 +33,19 @@ def safe_clone(repo_url: str, timeout: int = 60, shallow: bool = False) -> tuple
     if not repo_url or not isinstance(repo_url, str):
         raise InvalidRepositoryError(repo_url, "Repository URL is empty or not a string")
 
-    # Sanitize URL (basic check)
-    if not (repo_url.startswith("http") or repo_url.startswith("git@")):
-        raise InvalidRepositoryError(repo_url, "Repository URL must start with 'http' or 'git@'")
+    # Validate and sanitize URL
+    if not validate_repo_url(repo_url):
+        raise InvalidRepositoryError(
+            repo_url, 
+            "Repository URL is invalid or contains dangerous characters. "
+            "Must be a valid HTTP/HTTPS URL or git@ URL."
+        )
 
     # Create temporary directory for sandboxing
+    # Note: Using mkdtemp instead of TemporaryDirectory context manager
+    # because the repo_path needs to persist after this function returns
+    # (it's used by detectives for analysis). Cleanup is handled by the OS
+    # or by explicit cleanup in the graph execution if needed.
     temp_dir = tempfile.mkdtemp(prefix="auditor_repo_")
     repo_path = Path(temp_dir) / "repo"
 
@@ -76,12 +85,22 @@ def extract_git_history(repo_path: Path) -> Dict:
         Dictionary with commit history data
     """
     try:
-        repo = Repo(str(repo_path))
+        # Validate and sanitize repo_path
+        sanitized_path = sanitize_path(repo_path)
+        if not sanitized_path or not sanitized_path.exists():
+            return {
+                "error": "Invalid repository path",
+                "total_commits": 0,
+                "commits": [],
+            }
+        
+        repo = Repo(str(sanitized_path))
         
         # Use subprocess for git log (as per Architecture.MD spec)
+        # Security: shell=False prevents shell injection
         result = subprocess.run(
             ["git", "log", "--oneline", "--reverse"],
-            cwd=str(repo_path),
+            cwd=str(sanitized_path),
             capture_output=True,
             text=True,
             timeout=30,

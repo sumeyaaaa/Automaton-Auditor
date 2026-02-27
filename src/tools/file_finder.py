@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
+from src.tools.security_utils import sanitize_path
+
 
 def find_file_recursive(repo_path: Path, filename: str, max_depth: int = 3) -> Optional[Path]:
     """Recursively search for a file in the repository.
@@ -18,18 +20,35 @@ def find_file_recursive(repo_path: Path, filename: str, max_depth: int = 3) -> O
     Returns:
         Path to file if found, None otherwise
     """
+    # Security: Sanitize inputs
+    try:
+        sanitized_repo = sanitize_path(repo_path)
+        if not sanitized_repo or not sanitized_repo.exists():
+            return None
+        repo_path = sanitized_repo
+    except ValueError:
+        return None
+    
+    # Sanitize filename to prevent path traversal
+    from src.tools.security_utils import sanitize_filename
+    safe_filename = sanitize_filename(filename)
+    
     # Common locations to check first (fast path)
     common_paths = [
-        repo_path / "src" / filename,
-        repo_path / filename,
-        repo_path / "lib" / filename,
-        repo_path / "app" / filename,
-        repo_path / "core" / filename,
+        repo_path / "src" / safe_filename,
+        repo_path / safe_filename,
+        repo_path / "lib" / safe_filename,
+        repo_path / "app" / safe_filename,
+        repo_path / "core" / safe_filename,
     ]
     
     for path in common_paths:
-        if path.exists():
-            return path
+        try:
+            # Ensure path is still within repo_path (prevent traversal)
+            if path.exists() and str(path.resolve()).startswith(str(repo_path.resolve())):
+                return path
+        except (OSError, ValueError):
+            continue
     
     # Recursive search (limited depth for performance)
     for root, dirs, files in os.walk(repo_path):

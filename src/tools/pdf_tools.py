@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.exceptions import PDFNotFoundError, PDFParseError
+from src.tools.security_utils import validate_pdf_path, sanitize_path
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,22 @@ def ingest_pdf(pdf_path: Path) -> Dict:
         PDFNotFoundError: If the PDF file doesn't exist
         PDFParseError: If no parser can handle the file
     """
+    # Security: Validate PDF path before processing
+    if not validate_pdf_path(pdf_path):
+        raise PDFNotFoundError(
+            f"Invalid or unsafe PDF path: {pdf_path}. "
+            "Path must be a valid .pdf file under 100MB."
+        )
+    
+    # Sanitize path to prevent traversal
+    try:
+        sanitized_path = sanitize_path(pdf_path)
+        if not sanitized_path:
+            raise PDFNotFoundError(f"Path sanitization failed: {pdf_path}")
+        pdf_path = sanitized_path
+    except ValueError as e:
+        raise PDFNotFoundError(f"Path validation failed: {e}")
+    
     if not pdf_path.exists():
         raise PDFNotFoundError(str(pdf_path))
 
@@ -327,6 +344,21 @@ def extract_images_from_pdf(pdf_path: Path) -> List[Dict]:
     Returns:
         List of extracted images with metadata
     """
+    # Security: Validate PDF path before processing
+    if not validate_pdf_path(pdf_path):
+        logger.warning(f"Invalid or unsafe PDF path: {pdf_path}")
+        return []
+    
+    # Sanitize path to prevent traversal
+    try:
+        sanitized_path = sanitize_path(pdf_path)
+        if not sanitized_path:
+            return []
+        pdf_path = sanitized_path
+    except ValueError:
+        logger.warning(f"Path sanitization failed: {pdf_path}")
+        return []
+    
     if not pdf_path.exists():
         return []
 
