@@ -450,6 +450,8 @@ def run_audit(
         "opinions": [],
         "final_report": "",
         "repo_root": "",
+        "error_state": "none",
+        "error_message": "",
     }
 
     try:

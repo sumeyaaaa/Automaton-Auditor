@@ -2,19 +2,23 @@
 Chief Justice node for synthesizing final verdict.
 Implements deterministic conflict resolution rules.
 """
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 from src.state import AgentState, AuditReport, CriterionResult, JudicialOpinion
+
+logger = logging.getLogger(__name__)
 
 
 def chief_justice_node(state: AgentState) -> AgentState:
     """Chief Justice: The Synthesis Engine.
     
     Resolves dialectical conflict using hardcoded deterministic rules.
-    Generates final audit report.
+    Generates final audit report and persists it to disk.
     """
     opinions = state.get("opinions", [])
     repo_url = state["repo_url"]
@@ -130,9 +134,15 @@ def chief_justice_node(state: AgentState) -> AgentState:
         remediation_plan=remediation_plan,
     )
     
+    # Serialize to Markdown
+    markdown_report = final_report.to_markdown()
+    
+    # Persist report to disk (production-ready: node handles its own I/O)
+    _persist_report_to_disk(markdown_report, repo_url, git_commit_hash)
+    
     # Return Markdown string (required by AgentState.final_report: str)
     return {
-        "final_report": final_report.to_markdown(),
+        "final_report": markdown_report,
     }
 
 
@@ -520,3 +530,86 @@ def _generate_comprehensive_remediation_plan(
             plan_parts.append(f"- {cr.dimension_name}: {cr.remediation}")
     
     return "\n".join(plan_parts)
+
+
+def _parse_repo_owner_and_name(repo_url: str) -> tuple[Optional[str], Optional[str]]:
+    """Parse a GitHub-style repo URL into (owner, repo_name).
+    
+    Supports:
+    - https://github.com/owner/repo
+    - https://github.com/owner/repo.git
+    - git@github.com:owner/repo.git
+    
+    Returns:
+        (owner, repo) or (None, None) if parsing fails.
+    """
+    url = repo_url.strip()
+    
+    # SSH form: git@github.com:owner/repo.git
+    if url.startswith("git@"):
+        try:
+            _, rest = url.split(":", 1)
+            rest = rest.rstrip("/")
+            if rest.endswith(".git"):
+                rest = rest[:-4]
+            parts = rest.split("/")
+            if len(parts) >= 2:
+                return parts[-2], parts[-1]
+        except ValueError:
+            return None, None
+        return None, None
+    
+    # HTTPS form: https://github.com/owner/repo(.git)
+    if url.startswith("http"):
+        parsed = urlparse(url)
+        path = parsed.path.strip("/")
+        if path.endswith(".git"):
+            path = path[:-4]
+        parts = path.split("/")
+        if len(parts) >= 2:
+            return parts[-2], parts[-1]
+    
+    return None, None
+
+
+def _persist_report_to_disk(markdown_report: str, repo_url: str, git_commit_hash: str) -> None:
+    """Persist the final audit report to disk in repo-specific folder.
+    
+    This makes the Chief Justice node production-ready by handling its own I/O,
+    ensuring the report is always saved even if the runner function fails.
+    
+    Args:
+        markdown_report: The complete Markdown report string
+        repo_url: Repository URL for folder organization
+        git_commit_hash: Git commit hash for metadata
+    """
+    try:
+        # Derive repo-specific output path
+        owner, name = _parse_repo_owner_and_name(repo_url)
+        if owner and name:
+            output_path = (
+                Path("audit") / "report_generated" / owner / name / "audit_report.md"
+            )
+        else:
+            # Fallback: safe slug from the URL itself
+            safe_slug = (
+                repo_url.replace("://", "_")
+                .replace("/", "_")
+                .replace(":", "_")
+                .replace("\\", "_")
+            )
+            output_path = (
+                Path("audit") / "report_generated" / safe_slug / "audit_report.md"
+            )
+        
+        # Ensure directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write report to disk
+        output_path.write_text(markdown_report, encoding="utf-8")
+        logger.info(f"Chief Justice: Report persisted to {output_path}")
+        
+    except Exception as e:
+        # Log error but don't fail the node - report is still in state
+        logger.error(f"Chief Justice: Failed to persist report to disk: {e}")
+        # Report remains in state["final_report"] so runner can still save it
