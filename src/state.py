@@ -340,3 +340,7 @@ class AgentState(TypedDict):
     
     # ── Output (set by chief_justice as Markdown string) ──
     final_report: str
+    
+    # ── Error handling ──
+    error_state: str  # "none", "context_error", "detective_error", "judge_error", "synthesis_error"
+    error_message: str  # Human-readable error description

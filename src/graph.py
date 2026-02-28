@@ -8,6 +8,12 @@ Two graphs are available:
 - Interim: Detectives only (for testing evidence collection)
 - Final: Full pipeline including judges and synthesis
 
+Features:
+- Parallel fan-out/fan-in execution for detectives and judges
+- Conditional edges for error handling and graceful degradation
+- Error state tracking throughout the pipeline
+- Automatic routing based on evidence collection success
+
 Architecture spec reference: Section 5 — Graph Wiring
 """
 import logging
@@ -19,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.checkpoint.memory import MemorySaver
 
 from src.config import get_model_metadata
 from src.exceptions import NodeExecutionError, RubricLoadError
@@ -82,14 +89,27 @@ def context_builder_node(state: AgentState) -> dict:
 
     Runs at: Superstep 1 (before any detective)
     """
-    rubric_path = Path(state.get("rubric_path", "rubric.json"))
-    rubric = load_rubric(rubric_path)
+    try:
+        rubric_path = Path(state.get("rubric_path", "rubric.json"))
+        rubric = load_rubric(rubric_path)
 
-    return {
-        "rubric_dimensions": rubric["dimensions"],
-        "synthesis_rules": rubric.get("synthesis_rules", {}),
-        "model_metadata": get_model_metadata(),
-    }
+        return {
+            "rubric_dimensions": rubric["dimensions"],
+            "synthesis_rules": rubric.get("synthesis_rules", {}),
+            "model_metadata": get_model_metadata(),
+            "error_state": "none",
+            "error_message": "",
+        }
+    except Exception as e:
+        error_msg = f"Context builder failed: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "rubric_dimensions": [],
+            "synthesis_rules": {},
+            "model_metadata": {},
+            "error_state": "context_error",
+            "error_message": error_msg,
+        }
 
 
 # ──────────────────────────────────────────────
@@ -121,8 +141,24 @@ def create_interim_graph() -> StateGraph:
     # Superstep 1: Initialize
     workflow.add_edge(START, "context_builder")
 
-    # Superstep 2: Fan-out to 3 detectives in parallel
-    workflow.add_edge("context_builder", "repo_investigator")
+    # Superstep 2: Conditional routing after context builder
+    def route_after_context_interim(state: AgentState) -> str:
+        """Route based on context builder success."""
+        error_state = state.get("error_state", "none")
+        if error_state == "context_error":
+            return "error_exit"
+        return "continue"
+    
+    workflow.add_conditional_edges(
+        "context_builder",
+        route_after_context_interim,
+        {
+            "continue": "repo_investigator",  # Start fan-out from first detective
+            "error_exit": END,  # Graceful exit on context error
+        }
+    )
+    
+    # Superstep 2b: Fan-out to remaining detectives in parallel
     workflow.add_edge("context_builder", "doc_analyst")
     workflow.add_edge("context_builder", "vision_inspector")
 
@@ -134,8 +170,34 @@ def create_interim_graph() -> StateGraph:
         "evidence_aggregator",
     )
 
-    # Superstep 4: End (no judges in interim)
-    workflow.add_edge("evidence_aggregator", END)
+    # Superstep 4: Conditional routing after aggregator
+    def route_after_evidence_interim(state: AgentState) -> str:
+        """Route based on error state and evidence collection."""
+        error_state = state.get("error_state", "none")
+        evidences = state.get("evidences", {})
+        
+        if error_state == "detective_error":
+            return "error_exit"
+        
+        # Check if we have minimum evidence
+        if not evidences or len(evidences) == 0:
+            return "error_exit"
+        
+        # Check if we have evidence for at least some criteria
+        total_evidence = sum(len(ev_list) for ev_list in evidences.values() if isinstance(ev_list, list))
+        if total_evidence == 0:
+            return "error_exit"
+        
+        return "success"
+    
+    workflow.add_conditional_edges(
+        "evidence_aggregator",
+        route_after_evidence_interim,
+        {
+            "success": END,
+            "error_exit": END,  # For interim, just end gracefully with collected evidence
+        }
+    )
 
     return workflow.compile()
 
@@ -180,8 +242,27 @@ def create_auditor_graph() -> StateGraph:
     # Superstep 1: Initialize
     workflow.add_edge(START, "context_builder")
 
-    # Superstep 2: Fan-out to 3 detectives in parallel
-    workflow.add_edge("context_builder", "repo_investigator")
+    # Superstep 2: Conditional routing after context builder
+    # Check for errors, but always route to detectives (they handle errors gracefully)
+    def route_after_context(state: AgentState) -> str:
+        """Route based on context builder success."""
+        error_state = state.get("error_state", "none")
+        if error_state == "context_error":
+            return "error_exit"
+        # Even with errors, detectives can still attempt collection
+        return "continue"
+    
+    workflow.add_conditional_edges(
+        "context_builder",
+        route_after_context,
+        {
+            "continue": "repo_investigator",  # Route to first detective
+            "error_exit": END,  # Only exit on critical context errors
+        }
+    )
+    
+    # Superstep 2b: Fan-out to remaining detectives in parallel
+    # These execute regardless of conditional edge result (LangGraph allows this)
     workflow.add_edge("context_builder", "doc_analyst")
     workflow.add_edge("context_builder", "vision_inspector")
 
@@ -191,8 +272,38 @@ def create_auditor_graph() -> StateGraph:
         "evidence_aggregator",
     )
 
-    # Superstep 4: Fan-out to 3 judges in parallel
-    workflow.add_edge("evidence_aggregator", "prosecutor")
+    # Superstep 4: Conditional routing after evidence aggregation
+    # Check for sufficient evidence before proceeding to judges
+    def route_after_evidence(state: AgentState) -> str:
+        """Route based on evidence collection success."""
+        error_state = state.get("error_state", "none")
+        evidences = state.get("evidences", {})
+        
+        if error_state == "detective_error":
+            return "error_exit"
+        
+        # Check if we have minimum evidence for judges
+        if not evidences or len(evidences) == 0:
+            return "error_exit"
+        
+        # Check if we have evidence for at least some criteria
+        total_evidence = sum(len(ev_list) for ev_list in evidences.values() if isinstance(ev_list, list))
+        if total_evidence == 0:
+            return "error_exit"
+        
+        return "continue"
+    
+    workflow.add_conditional_edges(
+        "evidence_aggregator",
+        route_after_evidence,
+        {
+            "continue": "prosecutor",  # Route to first judge
+            "error_exit": END,  # Graceful exit if no evidence
+        }
+    )
+    
+    # Superstep 4b: Fan-out to remaining judges in parallel
+    # These execute when conditional edge routes to "continue"
     workflow.add_edge("evidence_aggregator", "defense")
     workflow.add_edge("evidence_aggregator", "tech_lead")
 
@@ -202,8 +313,28 @@ def create_auditor_graph() -> StateGraph:
         "chief_justice",
     )
 
-    # Superstep 6: Done
-    workflow.add_edge("chief_justice", END)
+    # Superstep 6: Conditional routing after chief justice
+    def route_after_synthesis(state: AgentState) -> str:
+        """Route based on synthesis success."""
+        error_state = state.get("error_state", "none")
+        final_report = state.get("final_report", "")
+        
+        if error_state == "synthesis_error":
+            return "error_exit"
+        
+        if not final_report:
+            return "error_exit"
+        
+        return "success"
+    
+    workflow.add_conditional_edges(
+        "chief_justice",
+        route_after_synthesis,
+        {
+            "success": END,
+            "error_exit": END,  # Graceful exit with partial results
+        }
+    )
 
     return workflow.compile()
 
@@ -264,6 +395,8 @@ def run_interim_audit(
         "opinions": [],
         "final_report": "",
         "repo_root": "",
+        "error_state": "none",
+        "error_message": "",
     }
 
     try:
