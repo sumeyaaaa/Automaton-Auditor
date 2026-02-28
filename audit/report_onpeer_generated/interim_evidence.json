@@ -1,0 +1,292 @@
+{
+  "metadata": {
+    "repo_url": "https://github.com/Abnet-Melaku1/automation-auditor",
+    "pdf_path": "reports/interim_report.md",
+    "git_commit_hash": "7bb891b1",
+    "timestamp": "2026-02-28T10:39:06.807191",
+    "model_metadata": {
+      "investigator": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "layer1": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "layer2": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "layer3": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "visual": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      }
+    }
+  },
+  "evidences": {
+    "doc": [
+      {
+        "criterion_id": "theoretical_depth",
+        "goal": "Search for key architectural terms with context (enhanced with semantic analysis)",
+        "found": true,
+        "location": "reports\\interim_report.md",
+        "confidence": 0.95,
+        "rationale": "Found 33 keyword occurrences, 11 substantive. Semantic analysis: The documentation explicitly frames the problem within theoretical AI-native software engineering pa",
+        "content": "{\"keyword_results\": {\"keywords\": [\"Dialectical Synthesis\", \"Fan-In / Fan-Out\", \"Fan-In/Fan-Out\", \"Metacognition\", \"State Synchronization\"], \"matches\": {\"Dialectical Synthesis\": [{\"chunk_id\": 1, \"matched_variant\": \"dialectical\", \"context\": \"al Courtroom**: an autonomous, hierarchical multi-agent system that accepts a GitHub repository URL and an architectural PDF report, prosecutes the submission through structured forensic analysis and dialectical judicial review, and produces a final `AuditReport` that provides specific, file-level r\", \"has_substance\": true}, {\"chunk_id\": 2, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"----------------- | ----------------------------- |\\n| **Detective Layer** | `repo_investigator`, `doc_analyst`, _(future)_ `vision_inspector` | \\u2705 Implemented                |\\n| **Judicial Layer**  | `prosecutor`, `defense`, `tech_lead`                              | \\ud83d\\udd32 Planned (final submission) |\\n| \", \"has_substance\": false}, {\"chunk_id\": 4, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"The Judicial Layer output is a `JudicialOpinion` model ([`src/state.py:122`](../src/state.py)):\\n\\n```python\\nclass JudicialOpinion(BaseModel):\\n    judge:           Literal[\\\"Prosecutor\\\", \\\"Defense\\\", \\\"TechLead\\\"]\\n    criterion_id:    str\\n    score:           int          # ge=1, le=5  \\u2014 validated by Pydan\", \"has_substance\": true}, {\"chunk_id\": 13, \"matched_variant\": \"dialectical synthesis\", \"context\": \"unctional in offline test environments.\\n\\n#### Substantiveness Heuristic \\u2014 Detecting Keyword Dropping\\n\\nThe rubric's `theoretical_depth` criterion distinguishes between a candidate who _uses_ the term \\\"Dialectical Synthesis\\\" and one who _understands_ it. Simply searching for the presence of the string\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"dialectical synthesis\", \"context\": \"`\\n\\nA term occurrence is only classified as `in_substantive_context=True` if its containing paragraph also contains at least one word from `_SUBSTANTIVE_VERBS`. A paragraph that reads _\\\"We implemented Dialectical Synthesis via three parallel judge personas\\\"_ passes; a sentence that reads _\\\"Our system\", \"has_substance\": false}, {\"chunk_id\": 15, \"matched_variant\": \"dialectical\", \"context\": \"rence using the `Evidence.location` fields accumulated from the RepoInvestigator's protocols as the authoritative file list.\\n\\n---\\n\\n## 4. Known Gaps & Planned Development\\n\\n### 4.1 Judicial Layer \\u2014 The Dialectical Bench\\n\\nThe Judicial Layer will introduce three Judge node functions in `src/nodes/judges\", \"has_substance\": true}, {\"chunk_id\": 19, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"```python\\n# Deterministic rule: confirmed security violation caps score at 3\\nif any(\\n    \\\"security\\\" in op.argument.lower() and op.judge == \\\"Prosecutor\\\"\\n    for op in criterion_opinions\\n):\\n    final_score = min(3, tech_lead_score)\\n\\n# Deterministic rule: score variance > 2 requires dissent summary\\neli\", \"has_substance\": false}, {\"chunk_id\": 25, \"matched_variant\": \"prosecutor.*defense\", \"context\": \"  # build_graph(), evidence_aggregator_node, run_interim_audit()\\n    \\u251c\\u2500\\u2500 nodes/\\n    \\u2502   \\u251c\\u2500\\u2500 detectives.py   # repo_investigator_node, doc_analyst_node\\n    \\u2502   \\u251c\\u2500\\u2500 judges.py       # [final submission] Prosecutor, Defense, TechLead\\n    \\u2502   \\u2514\\u2500\\u2500 justice.py      # [final submission] ChiefJusticeNode\\n    \", \"has_substance\": false}], \"Fan-In / Fan-Out\": [{\"chunk_id\": 1, \"matched_variant\": \"concurrent\", \"context\": \"ous agents generate features at machine speed, the human review bottleneck shifts from \\\"can we produce it?\\\" to \\\"can we trust it?\\\". Manual pull-request review cannot scale to the output of hundreds of concurrent agents.\\n\\nThe Automaton Auditor addresses this directly. Its mission is to operate as a **\", \"has_substance\": false}, {\"chunk_id\": 6, \"matched_variant\": \"concurrent\", \"context\": \"#### `operator.ior` \\u2014 Dict Merge for the Detective Layer\\n\\nWhen `repo_investigator_node` and `doc_analyst_node` execute concurrently, each returns a partial state update containing `{\\\"evidences\\\": {criterion_id: [Evidence, ...]}}`. Without a reducer, whichever node finishes second would silently overw\", \"has_substance\": false}, {\"chunk_id\": 7, \"matched_variant\": \"concurrent\", \"context\": \"When the three Judge nodes execute concurrently in the final submission, each returns `{\\\"opinions\\\": [JudicialOpinion(...)]}`. `operator.add` concatenates these lists rather than replacing them:\\n\\n```\\nstate[\\\"opinions\\\"] = (\\n    prosecutor_output[\\\"o\", \"has_substance\": false}, {\"chunk_id\": 10, \"matched_variant\": \"fan-in\", \"context\": \"onal)`\\n- Derives a `ParallelismReport` by grouping edges by source node: any source with two or more destinations is a confirmed **fan-out**; any destination with two or more sources is a confirmed **fan-in**\\n- Reports `is_purely_linear=True` when no fan-out exists \\u2014 the evidence for an \\\"Orchestrati\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"fan-in\", \"context\": \"```python\\n_SUBSTANTIVE_VERBS = frozenset({\\n    \\\"implemented\\\", \\\"executes\\\", \\\"using\\\", \\\"through\\\", \\\"via\\\",\\n    \\\"because\\\", \\\"whereby\\\", \\\"enables\\\", \\\"fan-out\\\", \\\"fan-in\\\",\\n    \\\"parallel\\\", \\\"graph\\\", \\\"node\\\", ...\\n})\\n\\ndef _is_substantive(text: str) -> bool:\\n    return any(indicator in text.lower() for indicator in _S\", \"has_substance\": true}, {\"chunk_id\": 15, \"matched_variant\": \"fan-in\", \"context\": \"cannot access the repo file listing at execution time.\\n\\nThe solution: DocAnalyst extracts all claimed paths using a regex over the full Markdown text and records them in `Evidence.content`. After the fan-in, `evidence_aggregator_node` in `src/graph.py` performs the secondary cross-reference using th\", \"has_substance\": true}, {\"chunk_id\": 17, \"matched_variant\": \"parallel execution\", \"context\": \"-------------------------------------------- |\\n| **Prosecutor**       | _\\\"Trust No One. Assume Vibe Coding.\\\"_    | Maximise scrutiny. If the evidence shows a linear pipeline where the rubric requires parallel execution, argue Score 1 and cite the specific `EdgeCall` objects from `GraphStructureRepor\", \"has_substance\": false}, {\"chunk_id\": 18, \"matched_variant\": \"fan-in\", \"context\": \"e Pydantic schema. Malformed responses trigger a retry before propagating failure.\\n\\nThe three nodes will run in a second **parallel fan-out** from `evidence_aggregator` to a new `judicial_aggregator` fan-in, mirroring the Detective topology.\\n\\n### 4.2 Synthesis Engine \\u2014 The Chief Justice\\n\\n`ChiefJusti\", \"has_substance\": false}, {\"chunk_id\": 21, \"matched_variant\": \"fan-out\", \"context\": \"completeness check\\\\nsecondary cross-reference \\u2461\\\\nLangSmith summary log\\\"]:::aggregator\\n    IEND[\\\"interim_end_node\\\\n(Judicial Layer placeholder)\\\"]:::terminal\\n    END_NODE([END]):::entry\\n\\n    START -->|\\\"fan-out\\\"| REPO\\n    START -->|\\\"fan-out\\\"| DOC\\n    REPO -->|\\\"evidences merged via operator.ior\\\"| AGG\\n  \", \"has_substance\": false}, {\"chunk_id\": 23, \"matched_variant\": \"fan-in\", \"context\": \"    REPO[\\\"RepoInvestigatorNode\\\"]:::detective\\n    DOC[\\\"DocAnalystNode\\\"]:::detective\\n    VIS[\\\"VisionInspectorNode\\\\n(implementation req.\\\\nexecution optional)\\\"]:::detective\\n    EAGG[\\\"EvidenceAggregator\\\\n(fan-in)\\\"]:::aggregator\\n    PROS[\\\"ProsecutorNode\\\\n.with_structured_output\\\\n(JudicialOpinion)\\\"]:::judg\", \"has_substance\": false}], \"Fan-In/Fan-Out\": [{\"chunk_id\": 10, \"matched_variant\": \"fan-in\", \"context\": \"onal)`\\n- Derives a `ParallelismReport` by grouping edges by source node: any source with two or more destinations is a confirmed **fan-out**; any destination with two or more sources is a confirmed **fan-in**\\n- Reports `is_purely_linear=True` when no fan-out exists \\u2014 the evidence for an \\\"Orchestrati\", \"has_substance\": true}, {\"chunk_id\": 14, \"matched_variant\": \"fan-in\", \"context\": \"```python\\n_SUBSTANTIVE_VERBS = frozenset({\\n    \\\"implemented\\\", \\\"executes\\\", \\\"using\\\", \\\"through\\\", \\\"via\\\",\\n    \\\"because\\\", \\\"whereby\\\", \\\"enables\\\", \\\"fan-out\\\", \\\"fan-in\\\",\\n    \\\"parallel\\\", \\\"graph\\\", \\\"node\\\", ...\\n})\\n\\ndef _is_substantive(text: str) -> bool:\\n    return any(indicator in text.lower() for indicator in _S\", \"has_substance\": true}, {\"chunk_id\": 15, \"matched_variant\": \"fan-in\", \"context\": \"cannot access the repo file listing at execution time.\\n\\nThe solution: DocAnalyst extracts all claimed paths using a regex over the full Markdown text and records them in `Evidence.content`. After the fan-in, `evidence_aggregator_node` in `src/graph.py` performs the secondary cross-reference using th\", \"has_substance\": true}, {\"chunk_id\": 17, \"matched_variant\": \"parallel execution\", \"context\": \"-------------------------------------------- |\\n| **Prosecutor**       | _\\\"Trust No One. Assume Vibe Coding.\\\"_    | Maximise scrutiny. If the evidence shows a linear pipeline where the rubric requires parallel execution, argue Score 1 and cite the specific `EdgeCall` objects from `GraphStructureRepor\", \"has_substance\": false}, {\"chunk_id\": 18, \"matched_variant\": \"fan-in\", \"context\": \"e Pydantic schema. Malformed responses trigger a retry before propagating failure.\\n\\nThe three nodes will run in a second **parallel fan-out** from `evidence_aggregator` to a new `judicial_aggregator` fan-in, mirroring the Detective topology.\\n\\n### 4.2 Synthesis Engine \\u2014 The Chief Jus... [TRUNCATED, original 14002 chars]"
+      },
+      {
+        "criterion_id": "report_accuracy",
+        "goal": "Extract file path claims for cross-referencing",
+        "found": true,
+        "location": "reports\\interim_report.md",
+        "confidence": 0.9,
+        "rationale": "Extracted 22 file path claims. Awaiting cross-reference by evidence_aggregator.",
+        "content": "{\"claimed_paths\": [\"src/state.py\", \"src/nodes/judges.py\", \"src/nodes/detectives.py\", \"state.py\", \"judges.py\", \"repo_tools.py\", \"doc_tools.py\", \"graph.py\", \"detectives.py\", \"justice.py\", \"src/nodes/justice.py\", \"src/tools/repo_tools.py\", \"nsrc/graph.py\", \"src/tools/doc_tools.py\", \"./src/tools/repo_tools.py\", \"./src/state.py\", \"rubric/rubric.json\", \"nsrc/nodes/detectives.py\", \"./src/tools/doc_tools.py\", \"pyproject.toml\", \"src/graph.py\", \"rubric.json\"]}"
+      }
+    ],
+    "repo": [
+      {
+        "criterion_id": "git_forensic_analysis",
+        "goal": "Analyze git commit history for forensic signals (with semantic analysis)",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo",
+        "confidence": 0.9,
+        "rationale": "Git history analyzed successfully. Semantic analysis: Commits follow a clear setup→implementation→documentation progression with atomic changes (infrastru",
+        "content": "{\"total_commits\": 11, \"commits\": [{\"hash\": \"537a18f7\", \"message\": \"chore: initialise project infrastructure\\n\\nAdd .gitignore, pyproject.toml (uv), and .env.example. Configures Ruff, Mypy, and Pytest.\", \"timestamp\": \"2026-02-23T09:14:22+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"5208b2ce\", \"message\": \"feat(rubric): add machine-readable rubric.json v3.0.0\\n\\nThe agent's 'Constitution' \\u2014 10 graded dimensions with forensic instructions and synthesis rules.\", \"timestamp\": \"2026-02-24T10:45:10+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"369dfd2f\", \"message\": \"feat(state): implement AgentState and Pydantic models\\n\\nAdd Evidence, JudicialOpinion, and AgentState with operator.ior and operator.add reducers for parallel safety.\", \"timestamp\": \"2026-02-24T15:20:44+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"2760a1eb\", \"message\": \"chore(tools): add src/tools package init\", \"timestamp\": \"2026-02-25T13:10:15+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"e20058be\", \"message\": \"feat(tools): implement RepoInvestigator forensic tools\\n\\nImplement 4-layer architecture: RepoManager sandbox, AST-based GraphForensics for parallel topology detection, and RepoInvestigator facade. Replaces regex with ast.parse to verify fan-out/fan-in wiring.\", \"timestamp\": \"2026-02-25T15:45:30+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"2618d31b\", \"message\": \"feat(tools): implement DocumentAuditor with RAG-lite PDF analysis\\n\\nIntegrate docling for ingest-once/query-many PDF analysis. Includes substantiveness heuristics to detect 'keyword dropping' and cross-referencing to flag hallucinated file paths.\", \"timestamp\": \"2026-02-25T17:20:12+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"ec5c97b3\", \"message\": \"chore(nodes): add src/nodes package init\", \"timestamp\": \"2026-02-25T22:06:30+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"9aa599e1\", \"message\": \"feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\\n\\nEach node is a pure state transformer returning\\n{'evidences': {criterion_id: [Evidence, ...]}}\\nwhich merges into AgentState.evidences via operator.ior.\\n\\n- repo_investigator_node wraps RepoInvestigator.run_all() and\\n  covers all 5 github_repo rubric criteria; CloneError and\\n  ValueError are caught and surfaced as Evidence so the graph\\n  never crashes on bad URLs or unreachable repos.\\n\\n- doc_analyst_node wraps DocumentAuditor (docling + fallback);\\n  covers theoretical_depth (substantiveness check for 5 rubric\\n  terms) and report_accuracy (path extraction); cross-reference\\n  against repo structure is deferred to EvidenceAggregator\\n  because both detectives run in parallel.\\n\\n- Module-level rubric loaded once via reliable __file__ path;\\n  _REPO_CRITERIA / _PDF_CRITERIA sets drive graceful failure\\n  maps so every criterion always has an Evidence entry.\", \"timestamp\": \"2026-02-25T22:06:31+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"940e6568\", \"message\": \"feat(graph): implement parallel detective StateGraph (interim submission)\\n\\nGraph topology:\\n  START \\u2192 [repo_investigator \\u2016 doc_analyst]  (fan-out)\\n        \\u2192 evidence_aggregator                (fan-in)\\n        \\u2192 interim_end \\u2192 END\\n\\nFan-out: two add_edge(START, ...) calls trigger concurrent execution.\\nFan-in: evidence_aggregator receives edges from both detectives;\\n        LangGraph only runs it after both branches complete and\\n        operator.ior has merged their evidences dicts.\\n\\nEvidenceAggregator:\\n  - verifies all 7 required interim criteria are present\\n  - performs secondary report_accuracy cross-reference using repo\\n    Evidence locations available post-merge\\n  - logs a concise completeness summary\\n\\nLangSmith tracing:\\n  - build_graph() returns compiled.with_config({'run_name': ...})\\n    so every LangSmith trace is labeled 'automaton-auditor'\\n  - run_interim_audit() sets LANGCHAIN_PROJECT and passes per-run\\n    metadata (repo_url, pdf_path, submission=interim)\\n  - load_dotenv() at module level picks up .env automatically\", \"timestamp\": \"2026-02-25T22:06:31+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"7c222626\", \"message\": \"docs: finalize interim architectural report for submission\", \"timestamp\": \"2026-02-25T22:21:34+03:00\", \"author\": \"Abnet-Melaku1\"}, {\"hash\": \"7bb891b1\", \"message\": \"docs: finalize README and architectural report for interim submission\\n\\n- Comprehensive README with uv setup, senior-level feature overview,\\n  and repository structure.\", \"timestamp\": \"2026-02-25T22:39:49+03:00\", \"author\": \"Abnet-Melaku1\"}], \"is_atomic\": true, \"has_progression\": true, \"log_output\": \"537a18f chore: initialise project infrastructure\\n5208b2c feat(rubric): add machine-readable rubric.json v3.0.0\\n369dfd2 feat(state): implement AgentState and Pydantic models\\n2760a1e chore(tools): add src/tools package init\\ne20058b feat(tools): implement RepoInvestigator forensic tools\\n2618d31 feat(tools): implement DocumentAuditor with RAG-lite PDF analysis\\nec5c97b chore(nodes): add src/nodes package init\\n9aa599e feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\\n940e656 feat(graph): implement parallel detective StateGraph (interim submission)\\n7c22262 docs: finalize interim architectural report for submission\\n7bb891b docs: finalize README and architectural report for interim submission\\n\", \"semantic_analysis\": {\"is_iterative\": true, \"is_atomic\": true, \"shows_progression\": true, \"rationale\": \"Commits follow a clear setup\\u2192implementation\\u2192documentation progression with atomic changes (infrastructure, models, tools, nodes, graph) culminating in architectural documentation.\"}}"
+      },
+      {
+        "criterion_id": "state_management_rigor",
+        "goal": "Check Pydantic state models and reducers",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src\\state.py",
+        "confidence": 0.95,
+        "rationale": "Pydantic BaseModel detected; TypedDict detected; Annotated reducers found (2 fields); Evidence model defined; JudicialOpinion model defined; Models: RubricDimension(BaseModel) at line 45, Evidence(BaseModel) at line 75, JudicialOpinion(BaseModel) at line 122, CriterionResult(BaseModel) at line 165, AuditReport(BaseModel) at line 208",
+        "content": "{\"found\": true, \"has_pydantic\": true, \"has_typeddict\": true, \"has_reducers\": true, \"has_evidence\": true, \"has_judicial_opinion\": true, \"is_properly_typed\": true, \"model_names\": [\"RubricDimension(BaseModel) at line 45\", \"Evidence(BaseModel) at line 75\", \"JudicialOpinion(BaseModel) at line 122\", \"CriterionResult(BaseModel) at line 165\", \"AuditReport(BaseModel) at line 208\", \"AgentState(TypedDict) at line 250\"], \"reducer_fields\": [\"Annotated[...] field 'evidences' at line 290\", \"Annotated[...] field 'opinions' at line 299\"], \"imports\": [\"from typing import Annotated\", \"from pydantic import BaseModel\", \"from pydantic import ConfigDict\", \"from pydantic import Field\", \"from typing_extensions import TypedDict\"]}"
+      },
+      {
+        "criterion_id": "graph_orchestration",
+        "goal": "Check LangGraph StateGraph orchestration",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src\\graph.py",
+        "confidence": 0.7,
+        "rationale": "StateGraph detected.",
+        "content": "{\"found\": true, \"has_stategraph\": true, \"has_parallel_edges\": true, \"has_conditional_edges\": false, \"has_fan_out\": true, \"has_fan_in\": true, \"node_count\": 4, \"nodes\": [\"repo_investigator\", \"doc_analyst\", \"evidence_aggregator\", \"interim_end\"], \"edge_count\": 6}"
+      },
+      {
+        "criterion_id": "graph_orchestration",
+        "goal": "Check parallel fan-out/fan-in edges",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src\\graph.py",
+        "confidence": 0.7,
+        "rationale": "Parallel edges detected.",
+        "content": "{\"found\": true, \"has_parallel_edges\": true, \"has_fan_out\": true, \"has_fan_in\": true, \"edge_count\": 6}"
+      },
+      {
+        "criterion_id": "safe_tool_engineering",
+        "goal": "Check sandboxing and subprocess usage",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src\\tools",
+        "confidence": 0.9,
+        "rationale": "tempfile sandboxing detected; secure subprocess usage; no os.system() calls; src\\tools\\repo_tools.py: tempfile.TemporaryDirectory, subprocess.run() at line 308: subprocess.run(",
+        "content": "{\"found\": true, \"has_sandboxing\": true, \"has_os_system\": false, \"uses_subprocess\": true, \"security_score\": \"safe\", \"files_analyzed\": 3, \"file_details\": [{\"file\": \"src\\\\tools\\\\repo_tools.py\", \"patterns\": [\"tempfile.TemporaryDirectory\", \"subprocess.run() at line 308: subprocess.run(\", \"subprocess.run() at line 338: result = subprocess.run(\"]}]}"
+      },
+      {
+        "criterion_id": "safe_tool_engineering",
+        "goal": "Check for security anti-patterns (os.system, eval, exec) via AST",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.95,
+        "rationale": "AST analysis found 0 security anti-patterns (no os.system, eval, or exec calls in src/).",
+        "content": "{\"found\": true, \"security_issues\": [], \"is_secure\": true, \"security_score\": \"safe\"}"
+      },
+      {
+        "criterion_id": "structured_output_enforcement",
+        "goal": "Check structured output enforcement in judges",
+        "found": false,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src\\nodes\\judges.py",
+        "confidence": 0.4,
+        "rationale": "No structured output methods found.",
+        "content": "{\"found\": false, \"has_structured_output\": false, \"error\": \"judges.py not found (searched recursively)\"}"
+      },
+      {
+        "criterion_id": "judicial_nuance",
+        "goal": "Check judge prompt diversity and persona differentiation",
+        "found": false,
+        "location": "not_found",
+        "confidence": 0.2,
+        "rationale": "judges.py not found. judges.py not found (searched recursively)",
+        "content": "{\"found\": false, \"has_diverse_prompts\": false, \"error\": \"judges.py not found (searched recursively)\"}"
+      },
+      {
+        "criterion_id": "chief_justice_synthesis",
+        "goal": "Check deterministic synthesis rules in Chief Justice",
+        "found": false,
+        "location": "not_found",
+        "confidence": 0.2,
+        "rationale": "justice.py not found. justice.py / synthesis.py not found (searched recursively)",
+        "content": "{\"found\": false, \"has_synthesis_rules\": false, \"is_deterministic\": false, \"error\": \"justice.py / synthesis.py not found (searched recursively)\"}"
+      },
+      {
+        "criterion_id": "general_repo_health",
+        "goal": "Check for README.md file and assess quality",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\README.md",
+        "confidence": 0.9,
+        "rationale": "README found with 0 sections. Quality score: 0.50",
+        "content": "{\"found\": true, \"has_readme\": true, \"quality_score\": 0.5, \"sections\": [], \"word_count\": 683, \"file_path\": \"README.md\"}"
+      },
+      {
+        "criterion_id": "general_repo_health",
+        "goal": "Check for .gitignore file and assess coverage",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\.gitignore",
+        "confidence": 0.8,
+        "rationale": ".gitignore found with 30 patterns. Coverage: 0.80",
+        "content": "{\"found\": true, \"has_gitignore\": true, \"coverage_score\": 0.8, \"patterns\": [\".env\", \"*.pem\", \"*.key\", \"__pycache__/\", \"*.py[cod]\", \"*.pyo\", \"*.pyd\", \"*.so\", \"*.egg\", \"*.egg-info/\", \"dist/\", \"build/\", \".eggs/\", \".venv/\", \"venv/\", \"env/\", \"uv.lock\", \".pytest_cache/\", \".coverage\", \"htmlcov/\", \"coverage.xml\", \".mypy_cache/\", \".ruff_cache/\", \".vscode/\", \".idea/\", \"*.swp\", \"*.swo\", \".DS_Store\", \"Thumbs.db\", \"/tmp/\"], \"important_patterns_found\": [\"\\\\.env\", \"__pycache__\", \"\\\\.venv\", \"venv/\", \"\\\\.idea\", \"\\\\.vscode\", \"dist/\", \"build/\"], \"total_patterns\": 30}"
+      },
+      {
+        "criterion_id": "general_repo_health",
+        "goal": "Check for LICENSE file",
+        "found": false,
+        "location": "not_found",
+        "confidence": 0.3,
+        "rationale": "LICENSE file not found",
+        "content": "{\"found\": false, \"has_license\": false}"
+      },
+      {
+        "criterion_id": "general_repo_health",
+        "goal": "Check git commit message standards",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo",
+        "confidence": 0.9090909090909091,
+        "rationale": "Commit quality score: 0.91. 10/11 commits follow standards",
+        "content": "{\"found\": true, \"total_commits_analyzed\": 11, \"good_commits\": 10, \"quality_score\": 0.9090909090909091, \"issues\": [\"Very long message: feat(graph): implement paralle...\"], \"sample_commits\": [\"7bb891b docs: finalize README and architectural report for interim submission\", \"7c22262 docs: finalize interim architectural report for submission\", \"940e656 feat(graph): implement parallel detective StateGraph (interim submission)\", \"9aa599e feat(nodes): implement RepoInvestigatorNode and DocAnalystNode\", \"ec5c97b chore(nodes): add src/nodes package init\"]}"
+      },
+      {
+        "criterion_id": "general_repo_health",
+        "goal": "Check basic project structure and organization",
+        "found": false,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo",
+        "confidence": 0.5,
+        "rationale": "Organization score: 0.50. Structure checks: 2/4",
+        "content": "{\"found\": true, \"structure_checks\": {\"has_src_directory\": true, \"has_tests_directory\": false, \"has_docs_directory\": false, \"has_config_file\": true}, \"organization_score\": 0.5}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Analyze code complexity metrics",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.5,
+        "rationale": "Average complexity: 3.02. 2 files with high complexity.",
+        "content": "{\"files_analyzed\": 8, \"high_complexity_files\": [{\"file\": \"src\\\\tools\\\\doc_tools.py\", \"complexity\": 21}, {\"file\": \"src\\\\tools\\\\repo_tools.py\", \"complexity\": 72}], \"max_complexity\": 11, \"average_complexity\": 3.0172413793103448, \"total_functions\": 58, \"has_high_complexity\": true}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check docstring coverage",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.7,
+        "rationale": "Function docstring coverage: 77.6%. 45/58 functions documented.",
+        "content": "{\"total_functions\": 58, \"functions_with_docstrings\": 45, \"total_classes\": 27, \"classes_with_docstrings\": 27, \"files_analyzed\": 8, \"low_coverage_files\": [], \"function_coverage\": 0.7758620689655172, \"class_coverage\": 1.0}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check type hint coverage",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.7,
+        "rationale": "Type hint coverage: 100.0%. 58/58 functions have type hints.",
+        "content": "{\"total_functions\": 58, \"functions_with_type_hints\": 58, \"files_analyzed\": 8, \"low_coverage_files\": [], \"type_hint_coverage\": 1.0}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check error handling quality",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.8,
+        "rationale": "Error handling coverage: 29.3%. Bare excepts: 0. Specific exceptions: 20",
+        "content": "{\"total_functions\": 58, \"functions_with_error_handling\": 17, \"bare_excepts\": 0, \"specific_exceptions\": 20, \"files_analyzed\": 8, \"poor_error_handling_files\": [{\"file\": \"src\\\\graph.py\", \"handling_coverage\": 0.14285714285714285, \"bare_excepts\": 0, \"functions\": 7}, {\"file\": \"src\\\\tools\\\\doc_tools.py\", \"handling_coverage\": 0.25, \"bare_excepts\": 0, \"functions\": 16}], \"error_handling_coverage\": 0.29310344827586204}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check test coverage indicators",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo",
+        "confidence": 0.3,
+        "rationale": "Test files: 0. Coverage config: True. Uses pytest: False",
+        "content": "{\"has_test_directory\": false, \"test_file_count\": 0, \"has_coverage_config\": true, \"uses_pytest\": false, \"uses_unittest\": false, \"test_files\": []}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check dependency management",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo",
+        "confidence": 0.7,
+        "rationale": "Dependency files: 1. Pinned dependencies: False",
+        "content": "{\"has_dependency_file\": true, \"dependency_files\": {\"pyproject.toml\": true}, \"pinned_dependencies\": false}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check for code duplication indicators",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.5,
+        "rationale": "Potential duplicates: 1. Functions with same signature found in multiple files.",
+        "content": "{\"potential_duplicates\": 1, \"duplicate_indicators\": [{\"signature\": \"__init__(1 params)\", \"files\": [\"src\\\\tools\\\\doc_tools.py\", \"src\\\\tools\\\\repo_tools.py\"], \"count\": 2}]}"
+      },
+      {
+        "criterion_id": "code_quality",
+        "goal": "Check import organization",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_v6e_dj3h\\repo\\src",
+        "confidence": 0.4,
+        "rationale": "Import organization score: 0.20. Wildcard imports: 0 files",
+        "content": "{\"files_analyzed\": 5, \"files_with_organized_imports\": 1, \"files_with_wildcard_imports\": 0, \"files_with_unused_imports_indicators\": 0, \"import_organization_score\": 0.2}"
+      }
+    ],
+    "vision": [
+      {
+        "criterion_id": "swarm_visual",
+        "goal": "Extract and classify architectural diagrams using Gemini multimodal analysis",
+        "found": true,
+        "location": "C:\\Users\\leanchem\\AppData\\Local\\Temp\\auditor_repo_0a_eo_ls\\repo\\reports\\interim_report.md",
+        "confidence": 0.8400000000000001,
+        "rationale": "Found 2 diagram/image artifacts in report. Gemini classification: System Architecture Diagram diagram. The diagram depicts a multi-layered system with distinct components (UI, API, services, databases) and their interconnections, showing both internal a",
+        "content": "{\"images_found\": 2, \"classification\": {\"diagram_type\": \"System Architecture Diagram\", \"is_architectural\": true, \"quality_score\": 0.85, \"key_elements\": [\"Components\", \"Layers\", \"Services\", \"Data Stores\", \"External Systems\", \"Connections/Flows\"], \"rationale\": \"The diagram depicts a multi-layered system with distinct components (UI, API, services, databases) and their interconnections, showing both internal architecture and external integrations typical of modern application design.\"}}"
+      }
+    ],
+    "cross_ref": [
+      {
+        "criterion_id": "report_accuracy",
+        "goal": "HALLUCINATION: Report claims 'justice.py' exists",
+        "found": false,
+        "location": "cross_ref:justice.py",
+        "confidence": 0.85,
+        "rationale": "Filename 'justice.py' not found in repo. Verified against 37 known files.",
+        "content": "justice.py"
+      },
+      {
+        "criterion_id": "report_accuracy",
+        "goal": "HALLUCINATION: Report claims 'src/nodes/justice.py' exists",
+        "found": false,
+        "location": "cross_ref:src/nodes/justice.py",
+        "confidence": 0.85,
+        "rationale": "Filename 'justice.py' not found in repo. Verified against 37 known files.",
+        "content": "src/nodes/justice.py"
+      },
+      {
+        "criterion_id": "report_accuracy",
+        "goal": "Cross-reference summary",
+        "found": true,
+        "location": "cross_ref:summary",
+        "confidence": 0.9,
+        "rationale": "Found 2 file paths in the PDF report that do not match any of 37 files in the repo (verified via filesystem scan).",
+        "content": "{\"hallucinated_count\": 2, \"total_known_files\": 37, \"verification_method\": \"filesystem scan\"}"
+      }
+    ]
+  }
+}

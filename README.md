@@ -58,16 +58,10 @@ pip install -e .
 ```
 
 3. Configure environment variables:
-   - Copy `.env.example` to `.env` (if not blocked by gitignore)
-   - Set your API keys (at minimum, you need one LLM provider):
-     - `DEEPSEEK_API_KEY`: For DeepSeek models (default, recommended for cost efficiency)
-     - `OPENAI_API_KEY`: For OpenAI models (GPT-4o, optional)
-     - `XAI_API_KEY`: For xAI/Grok models (optional)
-     - `GROQ_API_KEY`: For Groq/Llama models (optional)
-     - `GOOGLE_API_KEY`: For Google Gemini models (optional)
-     - `LANGCHAIN_API_KEY`: For LangSmith tracing (optional but recommended)
-     - `LANGCHAIN_TRACING_V2=true`: Enable tracing
-     - `LANGCHAIN_PROJECT=automaton-auditor`: LangSmith project name
+   - Copy `.env.example` to `.env` and fill in your API keys
+   - Required: `DEEPSEEK_API_KEY` (default provider)
+   - Optional: `OPENAI_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY`
+   - Optional: `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY` for observability
 
 ## Usage
 
@@ -81,13 +75,15 @@ python -m src.graph <repo_url> <pdf_path> --interim
 
 Example:
 ```bash
+# Supports both PDF and Markdown reports
 python -m src.graph https://github.com/user/repo.git reports/submission.pdf --interim
+python -m src.graph https://github.com/user/repo.git reports/interim_report.md --interim
 ```
 
 This will:
 1. Run all three detectives in parallel (RepoInvestigator, DocAnalyst, VisionInspector)
 2. Aggregate evidence
-3. Save evidence to `audit/interim_evidence.json`
+3. Save evidence to `audit/report_generated/{owner}/{repo_name}/interim_evidence.json` (automatically organized by repository)
 
 ### Running a Complete Audit (Final Submission)
 
@@ -99,8 +95,15 @@ python -m src.graph <repo_url> <pdf_path>
 
 Example:
 ```bash
+# Supports both PDF and Markdown reports
 python -m src.graph https://github.com/user/repo.git reports/submission.pdf
+python -m src.graph https://github.com/user/repo.git reports/interim_report.md
 ```
+
+This will:
+1. Run the complete audit pipeline (detectives → judges → synthesis)
+2. Save the audit report to `audit/report_generated/{owner}/{repo_name}/audit_report.md`
+3. Save evidence to `audit/report_generated/{owner}/{repo_name}/interim_evidence.json` (automatically)
 
 ### Programmatic Usage
 
@@ -110,11 +113,12 @@ from pathlib import Path
 from src.graph import run_interim_audit
 
 # Run interim audit (detectives only)
+# output_path is optional - will auto-generate repo-specific path if None
 final_state = run_interim_audit(
     repo_url="https://github.com/user/repo.git",
     pdf_path="reports/submission.pdf",
-    rubric_path=Path("rubric/week2_rubric.json"),
-    output_path=Path("audit/interim_evidence.json")
+    rubric_path="rubric.json",
+    output_path=None  # Auto: audit/report_generated/{owner}/{repo_name}/interim_evidence.json
 )
 
 # Access collected evidence
@@ -127,18 +131,20 @@ print(f"Collected evidence from {len(evidences)} sources")
 from pathlib import Path
 from src.graph import run_audit
 
-# Run complete audit (self-audit by default)
+# Run complete audit
+# output_path is optional - will auto-generate repo-specific path if using default
 final_state = run_audit(
     repo_url="https://github.com/user/repo.git",
     pdf_path="reports/submission.pdf",
-    rubric_path=Path("rubric/week2_rubric.json"),
-    audit_type="onself"  # Options: "onself", "onpeer", "bypeer"
+    rubric_path="rubric.json",
+    output_path=None  # Auto: audit/report_generated/{owner}/{repo_name}/audit_report.md
 )
 
 # Access final report
 report = final_state["final_report"]
-print(f"Report length: {len(report)} characters")
-# The report is a Markdown string saved to the audit directory
+print(f"Overall Score: {report.overall_score}/5.0")
+
+# Both audit_report.md and interim_evidence.json are saved in the same folder
 ```
 
 ## Project Structure
@@ -148,6 +154,8 @@ Automaton-Auditor/
 ├── src/
 │   ├── state.py              # Pydantic models and TypedDict state definitions
 │   ├── graph.py              # Main LangGraph orchestration
+│   ├── config.py             # Model factory and environment configuration
+│   ├── exceptions.py         # Custom exception classes
 │   ├── tools/
 │   │   ├── git_tools.py     # Safe git cloning and history extraction
 │   │   ├── ast_tools.py     # AST-based code structure analysis
@@ -158,14 +166,21 @@ Automaton-Auditor/
 │       ├── detectives.py    # RepoInvestigator, DocAnalyst, VisionInspector
 │       ├── judges.py         # Prosecutor, Defense, TechLead
 │       └── justice.py        # ChiefJustice synthesis engine
-├── rubric/
-│   └── week2_rubric.json     # Machine-readable evaluation rubric
 ├── audit/
-│   ├── report_bypeer_received/      # Reports peer generated about YOUR code
-│   ├── report_onpeer_generated/     # Reports YOUR agent generated about peer's code
-│   ├── report_onself_generated/     # Reports YOUR agent generated about YOUR OWN code
-│   └── langsmith_logs/              # Trace exports
-├── pyproject.toml            # Project dependencies
+│   ├── report_generated/           # Auto-organized by repository
+│   │   ├── {owner}/
+│   │   │   └── {repo_name}/
+│   │   │       ├── audit_report.md      # Full audit report
+│   │   │       └── interim_evidence.json # Evidence collected
+│   ├── report_onself_generated/    # Self-audit reports (symlinked/copied)
+│   ├── report_onpeer_generated/    # Peer audit reports (symlinked/copied)
+│   └── report_bypeer_received/     # Reports received from peers
+├── reports/
+│   └── final_report.pdf            # Final PDF report for submission
+├── rubric.json               # Machine-readable evaluation rubric
+├── pyproject.toml            # Project dependencies (uv)
+├── Dockerfile                # Containerized runtime (optional)
+├── .env.example              # Environment variables template
 ├── README.md                 # This file
 └── doc.md                    # Complete project specification
 ```
@@ -221,10 +236,40 @@ The auditor generates a structured Markdown report containing:
   - Specific remediation instructions
 - **Comprehensive Remediation Plan**: Prioritized action items
 
-Reports are saved to the appropriate directory based on audit type:
-- Self-audit: `audit/report_onself_generated/{owner}/{repo}/audit_report.md`
-- Peer audit: `audit/report_onpeer_generated/{owner}/{repo}/audit_report.md`
-- Received peer audit: `audit/report_bypeer_received/{owner}/{repo}/audit_report.md`
+### File Organization
+
+Reports and evidence are automatically organized by repository:
+
+```
+audit/report_generated/
+├── {owner}/
+│   └── {repo_name}/
+│       ├── audit_report.md          # Full audit report with scores
+│       └── interim_evidence.json    # Raw evidence collected by detectives
+```
+
+**Example:**
+- Repository: `https://github.com/sumeyaaaa/Automaton-Auditor`
+- Report: `audit/report_generated/sumeyaaaa/Automaton-Auditor/audit_report.md`
+- Evidence: `audit/report_generated/sumeyaaaa/Automaton-Auditor/interim_evidence.json`
+
+This ensures:
+- Multiple repositories can be audited without overwriting each other
+- Each repository's audit history is preserved
+- Easy navigation and comparison between different audits
+
+## Docker Deployment (Optional)
+
+Build and run using Docker:
+
+```bash
+# Build the image
+docker build -t automaton-auditor .
+
+# Run an audit
+docker run --env-file .env automaton-auditor \
+  python -m src.graph <repo_url> <pdf_path>
+```
 
 ## Development
 
@@ -241,69 +286,18 @@ black src/
 ruff check src/
 ```
 
-## Docker
+## Final Submission Structure
 
-### Building the Image
+This repository is structured according to the Week 2 requirements:
 
-```bash
-docker build -t automaton-auditor .
-```
-
-### Running with Docker
-
-#### Interim Audit (Detectives Only)
-```bash
-docker run --rm \
-  -v $(pwd)/audit:/app/audit \
-  -v $(pwd)/rubric:/app/rubric \
-  -v $(pwd)/reports:/app/reports \
-  -e DEEPSEEK_API_KEY=your_key_here \
-  automaton-auditor \
-  https://github.com/user/repo.git reports/submission.pdf --interim
-```
-
-#### Complete Audit
-```bash
-docker run --rm \
-  -v $(pwd)/audit:/app/audit \
-  -v $(pwd)/rubric:/app/rubric \
-  -v $(pwd)/reports:/app/reports \
-  -e DEEPSEEK_API_KEY=your_key_here \
-  -e LANGCHAIN_API_KEY=your_key_here \
-  -e LANGCHAIN_TRACING_V2=true \
-  automaton-auditor \
-  https://github.com/user/repo.git reports/submission.pdf
-```
-
-**Note:** On Windows PowerShell, use `${PWD}` instead of `$(pwd)`:
-```powershell
-docker run --rm `
-  -v ${PWD}/audit:/app/audit `
-  -v ${PWD}/rubric:/app/rubric `
-  -v ${PWD}/reports:/app/reports `
-  -e DEEPSEEK_API_KEY=your_key_here `
-  automaton-auditor `
-  https://github.com/user/repo.git reports/submission.pdf
-```
-
-### Docker Compose (Optional)
-
-Create a `docker-compose.yml` for easier management:
-```yaml
-version: '3.8'
-services:
-  auditor:
-    build: .
-    volumes:
-      - ./audit:/app/audit
-      - ./rubric:/app/rubric
-      - ./reports:/app/reports
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_TRACING_V2=true
-    command: ["https://github.com/user/repo.git", "reports/submission.pdf"]
-```
+- **Source Code**: All required modules in `src/`
+- **Infrastructure**: `pyproject.toml`, `.env.example`, `Dockerfile`
+- **Audit Reports**: 
+  - `audit/report_generated/{owner}/{repo}/` - Auto-organized by repository (both `audit_report.md` and `interim_evidence.json`)
+  - `audit/report_onself_generated/` - Self-audit report (convenience copy)
+  - `audit/report_onpeer_generated/` - Peer audit report (convenience copy)
+  - `audit/report_bypeer_received/` - Report received from peer
+- **Documentation**: `README.md`, `doc.md`, `reports/final_report.pdf`
 
 ## License
 
