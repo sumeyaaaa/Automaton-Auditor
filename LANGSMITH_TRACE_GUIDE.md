@@ -47,10 +47,12 @@ python -m src.graph https://github.com/sumeyaaaa/Automaton-Auditor reports/final
 Or for a peer audit:
 
 ```bash
-python -m src.graph https://github.com/Abnet-Melaku1/automation-auditor reports/interim_report.md
+python -m src.graph https://github.com/Abnet-Melaku1/automation-auditor reports/interim_report.pdf
 ```
 
-**Note**: The tracing happens automatically when `LANGCHAIN_TRACING_V2=true` is set. You don't need to do anything special - just run the audit normally.
+**Note**: 
+- The tracing happens automatically when `LANGCHAIN_TRACING_V2=true` is set. You don't need to do anything special - just run the audit normally.
+- The system supports both PDF (`.pdf`) and Markdown (`.md`) report formats. Use the appropriate file path for your report.
 
 ## Step 4: Find Your Trace Link
 
